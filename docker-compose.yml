@@ -1,0 +1,21 @@
+version: '3.4'
+
+services:
+  xl.api:
+    image: ${DOCKER_REGISTRY-}xlapi
+    build:
+      context: .
+      dockerfile: XL.API/Dockerfile
+
+  sql-server:
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    container_name: sql-server
+    environment:
+      SA_PASSWORD: YourStrongPassword123
+      ACCEPT_EULA: Y
+    ports:
+      - "1433:1433"
+    volumes:
+      - sql-data:/var/opt/mssql
+volumes:
+  sql-data:

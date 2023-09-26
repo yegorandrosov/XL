@@ -8,6 +8,8 @@ public class SheetCellEntityTypeConfiguration : IEntityTypeConfiguration<SheetCe
 {
     public void Configure(EntityTypeBuilder<SheetCell> builder)
     {
-        builder.HasKey(x => new { x.SheetId, x.Reference });
+        builder.HasKey(x => x.Id);
+
+        builder.HasIndex(x => new { x.SheetId, x.CellId }).IsUnique();
     }
 }

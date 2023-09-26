@@ -24,7 +24,12 @@ public static class CreateSheetCell
 
         public Task<Unit> Handle(Command request, CancellationToken cancellationToken)
         {
-            context.SheetCells.Add(new SheetCell(request.SheetId, request.CellId, request.Value));
+            context.SheetCells.Add(new SheetCell()
+            {
+                SheetId = request.SheetId,
+                CellId = request.CellId,
+                Value = request.Value
+            });
             context.SaveChanges();
 
             return Task.FromResult(default(Unit));

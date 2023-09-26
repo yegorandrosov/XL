@@ -1,25 +1,15 @@
 ﻿namespace XL.API.Data.Models;
 
+// ReSharper disable once ClassWithVirtualMembersNeverInherited.Global
 public class SheetCell
 {
     public int Id { get; set; }
-    public string SheetId { get; set; }
-    public string CellId { get; set; }
-    public string Expression { get; set; }
-    public string Value { get; set; }
+    public string SheetId { get; set; } = null!;
+    public string CellId { get; set; } = null!;
+    public string Expression { get; set; } = null!;
+    public string Value { get; set; } = null!;
     public int Level { get; set; }
-    
-    public virtual ICollection<SheetCellReference> Callers { get; set; }
-    public virtual ICollection<SheetCellReference> Arguments { get; set; }
+
+    public virtual ICollection<SheetCellReference> Callers { get; set; } = new List<SheetCellReference>();
+    public virtual ICollection<SheetCellReference> Arguments { get; set; } = new List<SheetCellReference>();
 }
-
-public class SheetCellReference
-{
-    public int ParentId { get; set; }
-    public int ChildId { get; set; }
-
-    public virtual SheetCell Parent { get; set; }
-    
-    public virtual SheetCell Child { get; set; }
-}
-

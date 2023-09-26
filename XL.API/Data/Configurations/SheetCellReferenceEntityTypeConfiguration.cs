@@ -8,10 +8,14 @@ public class SheetCellReferenceEntityTypeConfiguration : IEntityTypeConfiguratio
 {
     public void Configure(EntityTypeBuilder<SheetCellReference> builder)
     {
+        builder.HasKey(x => new { x.ParentId, x.ChildId });
+
         builder.HasOne(x => x.Parent)
-            .WithMany(x => x.Arguments);
+            .WithMany(x => x.Arguments)
+            .OnDelete(DeleteBehavior.NoAction);
 
         builder.HasOne(x => x.Child)
-            .WithMany(x => x.Callers);
+            .WithMany(x => x.Callers)
+            .OnDelete(DeleteBehavior.NoAction);
     }
 }

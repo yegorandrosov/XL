@@ -6,10 +6,12 @@ services:
     build:
       context: .
       dockerfile: XL.API/Dockerfile
+    ports:
+      - "8080:80"
 
-  sql-server:
+  sql:
     image: mcr.microsoft.com/mssql/server:2019-latest
-    container_name: sql-server
+    container_name: sql
     environment:
       SA_PASSWORD: YourStrongPassword123
       ACCEPT_EULA: Y

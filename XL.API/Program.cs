@@ -30,6 +30,7 @@ app.UseSwaggerUI();
 
 app.MapCarter();
 
+app.MapGet("/", () => "Hello World!");
 
 app.Run();
 

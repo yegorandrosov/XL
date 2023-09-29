@@ -21,10 +21,9 @@ public class ExpressionParserTests
     {
         for (var i = 1; i < 10; i++)
         {
-            var result = parser.NextTokenIsValid(new Expression(), ConvertIntToChar(i));
+            var type = parser.ParseTokenType(null, ConvertIntToChar(i));
 
-            Assert.IsTrue(result.Valid);
-            Assert.That(result.ExpressionType, Is.EqualTo(ExpressionType.ConstantInt));
+            Assert.That(type, Is.EqualTo(TokenType.Digit));
         }
     }
 
@@ -32,10 +31,9 @@ public class ExpressionParserTests
     [TestCase]
     public void NextTokenIsValid_0InTheStart()
     {
-        var result = parser.NextTokenIsValid(new Expression(), '0');
+        var type = parser.ParseTokenType(null, ConvertIntToChar(0));
 
-        Assert.IsTrue(result.Valid);
-        Assert.That(result.ExpressionType, Is.EqualTo(ExpressionType.Zero));
+        Assert.That(type, Is.EqualTo(TokenType.Zero));
     }
 
     [TestCase]
@@ -43,13 +41,9 @@ public class ExpressionParserTests
     {
         for (var i = 1; i < 10; i++)
         {
-            var result = parser.NextTokenIsValid(new Expression()
-            {
-                Type = ExpressionType.Zero
-            }, ConvertIntToChar(i));
+            var type = parser.ParseTokenType(new Token('0', TokenType.Zero), ConvertIntToChar(i));
 
-            Assert.IsFalse(result.Valid);
-            Assert.That(result.ExpressionType, Is.EqualTo(ExpressionType.Error));
+            Assert.That(type, Is.EqualTo(TokenType.InvalidToken));
         }
     }
 
@@ -58,13 +52,9 @@ public class ExpressionParserTests
     {
         for (var i = 0; i < 10; i++)
         {
-            var result = parser.NextTokenIsValid(new Expression()
-            {
-                Type = ExpressionType.ConstantInt
-            }, ConvertIntToChar(i));
+            var type = parser.ParseTokenType(new Token('1', TokenType.Digit), ConvertIntToChar(i));
 
-            Assert.IsTrue(result.Valid);
-            Assert.That(result.ExpressionType, Is.EqualTo(ExpressionType.ConstantInt));
+            Assert.That(type, Is.EqualTo(TokenType.Digit));
         }
     }
 
@@ -78,22 +68,66 @@ public class ExpressionParserTests
     };
 
     [TestCaseSource(nameof(SingleDigit))]
-    public void Parse_SingleDigit(string digit, int value)
+    public void Parse_SingleNumber(string digit, int value)
     {
-        var expression = parser.Parse(digit);
-
-        Assert.That(expression.Count(), Is.EqualTo(1));
-        Assert.That(expression.Value, Is.EqualTo(digit));
+        var expression = parser.ParseExpression(digit);
+        Assert.Multiple(() =>
+        {
+            Assert.That(expression.AsEnumerable().Count(), Is.EqualTo(1));
+            Assert.That(expression.Value, Is.EqualTo(digit));
+        });
     }
 
     [TestCase]
     public void Parse_Add()
     {
-        var expression = parser.Parse("1+1");
+        var expression = parser.ParseExpression("1+1");
+        var expressions = expression.AsEnumerable().ToList();
+        
+        Assert.That(expressions, Has.Count.EqualTo(3));
+        Assert.Multiple(() =>
+        {
+            Assert.That(expressions[0].Value, Is.EqualTo("1"));
+            Assert.That(expressions[1].Value, Is.EqualTo("+"));
+            Assert.That(expressions[2].Value, Is.EqualTo("1"));
+        });
+    }
 
-        Assert.That(expression.Count(), Is.EqualTo(3));
-        Assert.That(expression.At(0).Value, Is.EqualTo("1"));
-        Assert.That(expression.At(1).Value, Is.EqualTo("+"));
-        Assert.That(expression.At(2).Value, Is.EqualTo("1"));
+    [TestCase]
+    public void Parse_AddComplex()
+    {
+        var expression = parser.ParseExpression("1492+1001+467471");
+        var expressions = expression.AsEnumerable().ToList();
+        
+        Assert.That(expressions, Has.Count.EqualTo(5));
+        Assert.Multiple(() =>
+        {
+            Assert.That(expressions[0].Value, Is.EqualTo("1492"));
+            Assert.That(expressions[1].Value, Is.EqualTo("+"));
+            Assert.That(expressions[2].Value, Is.EqualTo("1001"));
+            Assert.That(expressions[3].Value, Is.EqualTo("+"));
+            Assert.That(expressions[4].Value, Is.EqualTo("467471"));
+        });
+    }
+
+    [TestCase]
+    public void Parse_MixBasicOperations()
+    {
+        var expression = parser.ParseExpression("432*22/321+1323-2483");
+        var expressions = expression.AsEnumerable().ToList();
+        
+        Assert.That(expressions, Has.Count.EqualTo(9));
+        Assert.Multiple(() =>
+        {
+            Assert.That(expressions[0].Value, Is.EqualTo("432"));
+            Assert.That(expressions[1].Value, Is.EqualTo("*"));
+            Assert.That(expressions[2].Value, Is.EqualTo("22"));
+            Assert.That(expressions[3].Value, Is.EqualTo("/"));
+            Assert.That(expressions[4].Value, Is.EqualTo("321"));
+            Assert.That(expressions[5].Value, Is.EqualTo("+"));
+            Assert.That(expressions[6].Value, Is.EqualTo("1323"));
+            Assert.That(expressions[7].Value, Is.EqualTo("-"));
+            Assert.That(expressions[8].Value, Is.EqualTo("2483"));
+        });
     }
 }

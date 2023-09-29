@@ -2,257 +2,212 @@
 
 namespace XL.API
 {
-    public enum ExpressionType
+    public enum TokenType
     {
+        InvalidToken = -1,
         None = 0,
-        Error,
-        Zero,
         BinaryOperand,
-        ConstantInt,
-        ConstantDouble,
-        Formula
+        Zero,
+        Digit,
+        Formula,
     }
+
+    public record Token(char Value, TokenType Type);
 
     public class Expression
     {
         public Expression? Previous { get; set; }
         public Expression? Next { get; set; }
 
-        private StringBuilder stringBuilder = new StringBuilder();
+        public List<Token> Tokens { get; set; } = new List<Token>();
 
-        public Expression() { }
-        public Expression(char initialValue) { stringBuilder.Append(initialValue); }
-
-        public void Append(char ch)
+        public string Value
         {
-            stringBuilder.Append(ch);
-        }
+            get
+            {
+                var sb = new StringBuilder();
+                foreach (var c in Tokens.Select(x => x.Value))
+                {
+                    sb.Append(c);
+                }
 
-        public void Complete()
-        {
-            Value = stringBuilder.ToString();
+                return sb.ToString();
+            }
         }
-
-        public int Count()
+        
+        public IEnumerable<Expression> AsEnumerable()
         {
             var current = this;
-            var counter = 0;
+
             do
             {
+                yield return current;
+
                 current = current.Next;
-                counter++;
             } while (current != null);
-
-            return counter;
         }
-
-        public Expression At(int position)
-        {
-            var current = this;
-            var counter = 0;
-
-            while (current != null)
-            {
-                if (counter == position)
-                    return current;
-
-                current = current.Next;
-                counter++;
-            }
-
-            throw new ArgumentOutOfRangeException(nameof(position));
-        }
-
-        public string? Value { get; private set; }
-        public ExpressionType Type { get; set; }
     }
 
     public class ExpressionParser
     {
-        public Expression Parse(string expression)
+        public Expression ParseExpression(string expression)
         {
-            var rootExpression = new Expression() { Type = ExpressionType.None };
-            var currentExpression = rootExpression;
+            var tokens = ParseTokens(expression);
+            var root = ConvertTokensToExpression(tokens);
 
-            for (var i = 0; i < expression.Length; i++)
+            return root;
+        }
+
+        private Expression ConvertTokensToExpression(List<Token> tokens)
+        {
+            var root = new Expression();
+            var current = root;
+            current.Tokens.Add(tokens[0]);
+            
+            for (var i = 1; i < tokens.Count; i++)
             {
-                var c = expression[i];
-
-                var tokenValidationResult = NextTokenIsValid(currentExpression.Previous, c);
-
-                if (!tokenValidationResult.Valid)
+                if (tokens[i].Type != tokens[i - 1].Type ||
+                    !ExpressionMayContainMultipleTokens(tokens[i].Type))
                 {
-                    throw new ExpressionParserException(expression, i);
+                    var next = new Expression();
+                    next.Previous = current;
+                    next.Tokens.Add(tokens[i]);
+
+                    current.Next = next;
+
+                    current = next;
                 }
-
-                if (!tokenValidationResult.PreviousExpressionEnded)
+                else
                 {
-                    currentExpression.Append(c);
-                    currentExpression.Type = tokenValidationResult.ExpressionType;
-                }
-
-                var isLastElement = i == expression.Length - 1;
-                if (tokenValidationResult.PreviousExpressionEnded || isLastElement)
-                {
-                    currentExpression.Complete();
-
-                    if (!isLastElement)
-                    {
-                        var nextExpression = new Expression(c)
-                        {
-                            Type = tokenValidationResult.ExpressionType,
-                        };
-                        currentExpression.Next = nextExpression;
-                        nextExpression.Previous = currentExpression;
-
-                        currentExpression = nextExpression;
-                    }
+                    current.Tokens.Add(tokens[i]);
                 }
             }
 
-            return rootExpression;
+            return root;
         }
 
-        public TokenValidationResult NextTokenIsValid(Expression? previous, char token)
+        public List<Token> ParseTokens(string expression)
         {
-            if (previous == null || previous.Type == ExpressionType.None)
+            var tokens = new List<Token>();
+            Token? previous = null;
+
+            for (var i = 0; i < expression.Length; i++)
+            {
+                var charToken = expression[i];
+
+                var tokenType = ParseTokenType(previous, charToken);
+
+                if (tokenType == TokenType.InvalidToken)
+                {
+                    throw new ExpressionParserException(i);
+                }
+
+                var newToken = new Token(charToken, tokenType);
+
+                tokens.Add(newToken);
+
+                previous = newToken;
+            }
+
+            return tokens;
+        }
+
+        public TokenType ParseTokenType(Token? previous, char token)
+        {
+            if (previous == null || previous.Type == TokenType.None)
             {
                 switch (token)
                 {
                     case '=':
-                        return new TokenValidationResult()
-                        {
-                            ExpressionType = ExpressionType.Formula,
-                            PreviousExpressionEnded = false,
-                            Valid = true,
+                        return TokenType.Formula;
+                    case '0':
+                        return TokenType.Zero;
+                    case '1':
+                    case '2':
+                    case '3':
+                    case '4':
+                    case '5':
+                    case '6':
+                    case '7':
+                    case '8':
+                    case '9':
+                        return TokenType.Digit;
+                }
+            }
+            else if (previous.Type == TokenType.Digit)
+            {
+                switch (token)
+                {
+                    case '0':
+                    case '1':
+                    case '2':
+                    case '3':
+                    case '4':
+                    case '5':
+                    case '6':
+                    case '7':
+                    case '8':
+                    case '9':
+                        return TokenType.Digit;
+                    case '+':
+                    case '-':
+                    case '*':
+                    case '/':
+                        return TokenType.BinaryOperand;
+                }
+            }
+            else if (previous.Type == TokenType.BinaryOperand)
+            {
+                switch (token)
+                {
+                    case '0':
+                    case '1':
+                    case '2':
+                    case '3':
+                    case '4':
+                    case '5':
+                    case '6':
+                    case '7':
+                    case '8':
+                    case '9':
+                        return TokenType.Digit;
+                }
+            }
 
-                        };
-                    case '0':
-                        return new TokenValidationResult()
-                        {
-                            ExpressionType = ExpressionType.Zero,
-                            PreviousExpressionEnded = false,
-                            Valid = true,
-                        };
-                    case '1':
-                    case '2':
-                    case '3':
-                    case '4':
-                    case '5':
-                    case '6':
-                    case '7':
-                    case '8':
-                    case '9':
-                        return new TokenValidationResult()
-                        {
-                            ExpressionType = ExpressionType.ConstantInt,
-                            PreviousExpressionEnded = false,
-                            Valid = true,
-                        };
-                }
-            }
-            else if (previous.Type == ExpressionType.Zero)
+            return TokenType.InvalidToken;
+        }
+
+        private bool ExpressionMayContainMultipleTokens(TokenType type)
+        {
+            return type switch
             {
-                switch (token)
-                {
-                    case '+':
-                    case '-':
-                    case '*':
-                    case '/':
-                        return new TokenValidationResult()
-                        {
-                            ExpressionType = ExpressionType.BinaryOperand,
-                            PreviousExpressionEnded = true,
-                            Valid = true,
-                        };
-                }
-            }
-            else if (previous.Type == ExpressionType.ConstantInt)
-            {
-                switch (token)
-                {
-                    case '0':
-                    case '1':
-                    case '2':
-                    case '3':
-                    case '4':
-                    case '5':
-                    case '6':
-                    case '7':
-                    case '8':
-                    case '9':
-                        return new TokenValidationResult()
-                        {
-                            ExpressionType = ExpressionType.ConstantInt,
-                            PreviousExpressionEnded = false,
-                            Valid = true,
-                        };
-                    case '+':
-                    case '-':
-                    case '*':
-                    case '/':
-                        return new TokenValidationResult()
-                        {
-                            ExpressionType = ExpressionType.BinaryOperand,
-                            PreviousExpressionEnded = true,
-                            Valid = true,
-                        };
-                }
-            }
-            else if (previous.Type == ExpressionType.BinaryOperand)
-            {
-                switch (token)
-                {
-                    case '0':
-                    case '1':
-                    case '2':
-                    case '3':
-                    case '4':
-                    case '5':
-                    case '6':
-                    case '7':
-                    case '8':
-                    case '9':
-                        return new TokenValidationResult()
-                        {
-                            ExpressionType = ExpressionType.ConstantInt,
-                            PreviousExpressionEnded = true,
-                            Valid = true,
-                        };
-                }
-            }
-            return new TokenValidationResult()
-            {
-                ExpressionType = ExpressionType.Error,
-                PreviousExpressionEnded = true,
-                Valid = false,
+                TokenType.InvalidToken => false,
+                TokenType.None => false,
+                TokenType.BinaryOperand => false,
+                TokenType.Zero => true,
+                TokenType.Digit => true,
+                TokenType.Formula => false,
+                _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
             };
         }
     }
 
     public class TokenValidationResult
     {
-        public required bool Valid { get; init; }
-        public required ExpressionType ExpressionType { get; init; }
-        public required bool PreviousExpressionEnded { get; init; }
-
-        public bool IsNumber => ExpressionType == ExpressionType.Zero || ExpressionType == ExpressionType.ConstantInt;
+        public required TokenType ExpressionType { get; init; }
     }
 
+    public class TokenNotValidException : Exception
+    {
+        public TokenNotValidException() { }
+        public TokenNotValidException(string message) : base(message) { }
+    }
 
     public class ExpressionParserException : Exception
     {
-        public ExpressionParserException(string expression, int charPosition)
+        public ExpressionParserException(int charPosition)
             : base($"Unexpected char at {charPosition}")
         {
-            Expression = expression;
         }
-
-        public string Expression { get; }
-    }
-
-    public static class ExpressionTypeExtensions
-    {
-        public static bool IsInt(this ExpressionType type) => type == ExpressionType.Zero || type == ExpressionType.ConstantInt;
     }
 }

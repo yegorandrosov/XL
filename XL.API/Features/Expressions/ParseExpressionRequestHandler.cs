@@ -1,13 +1,10 @@
 ﻿using System.Diagnostics;
 using System.Globalization;
-using MediatR;
-using OneOf;
 
-namespace XL.API.Features.Parser;
+namespace XL.API.Features.Expressions;
 
 public record ParserError;
 
-public record ParseExpressionRequest(string SheetId, string Expression) : IRequest<OneOf<Expression, ParserError>>;
 public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequest, OneOf<Expression, ParserError>>
 {
     private readonly IMediator mediator;
@@ -23,7 +20,7 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
         var root = ConvertTokensToExpression(tokens);
         try
         {
-            if (root.IsNumber)
+            if (root.IsNumber || root.IsText)
             {
                 return root;
             }
@@ -39,6 +36,7 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
         }
         catch (Exception)
         {
+            // ignored
         }
         
         return new ParserError();
@@ -292,6 +290,9 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
             if (char.IsDigit(token))
                 return TokenType.Digit;
 
+            if (token.IsMinus())
+                return TokenType.Digit;
+
             return TokenType.Text;
         }
 
@@ -333,6 +334,9 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
                 
             if (token.IsOpeningParenthesis())
                 return TokenType.OpeningParenthesis;
+            
+            if (token.IsMinus())
+                return TokenType.Digit;
         }
         else if (previous.Type == TokenType.Variable)
         {
@@ -370,6 +374,9 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
 
             if (token.IsText())
                 return TokenType.Variable;
+
+            if (token.IsMinus())
+                return TokenType.Digit;
         }
 
         return TokenType.InvalidToken;
@@ -409,23 +416,13 @@ public static class CharExtensions
         return false;
     }
 
-    public static bool IsFormulaSign(this char ch)
-    {
-        return ch == '=';
-    }
+    public static bool IsFormulaSign(this char ch) => ch == '=';
 
-    public static bool IsText(this char c)
-    {
-        return c is >= 'a' and <= 'z' or >= 'A' and <= 'Z';
-    }
+    public static bool IsText(this char c) => c is >= 'a' and <= 'z' or >= 'A' and <= 'Z';
 
-    public static bool IsClosingParenthesis(this char c)
-    {
-        return c is ')';
-    }
+    public static bool IsClosingParenthesis(this char c) => c is ')';
 
-    public static bool IsOpeningParenthesis(this char c)
-    {
-        return c is '(';
-    }
+    public static bool IsOpeningParenthesis(this char c) => c is '(';
+
+    public static bool IsMinus(this char c) => c is '-';
 }

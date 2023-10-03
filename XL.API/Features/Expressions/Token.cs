@@ -1,3 +1,3 @@
-﻿namespace XL.API.Features.Parser;
+﻿namespace XL.API.Features.Expressions;
 
 public record Token(char Value, TokenType Type);

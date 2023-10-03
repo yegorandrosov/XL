@@ -1,6 +1,6 @@
 ﻿using System.Text;
 
-namespace XL.API.Features.Parser;
+namespace XL.API.Features.Expressions;
 
 public class Expression
 {
@@ -36,18 +36,6 @@ public class Expression
 
             return sb.ToString();
         }
-    }
-        
-    public IEnumerable<Expression> AsEnumerable()
-    {
-        var current = this;
-
-        do
-        {
-            yield return current;
-
-            current = current.Next;
-        } while (current != null);
     }
 
     public override string ToString()

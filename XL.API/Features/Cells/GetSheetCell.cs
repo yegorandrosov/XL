@@ -1,8 +1,6 @@
 ﻿using Carter;
-using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using OneOf;
 using XL.API.Data;
 using XL.API.Data.Models;
 using XL.API.Models;

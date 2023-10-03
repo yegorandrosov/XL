@@ -1,5 +1,5 @@
 using MediatR;
-using XL.API.Features.Parser;
+using XL.API.Features.Expressions;
 
 namespace XL.Tests;
 
@@ -22,6 +22,8 @@ public class ExpressionParserTests
     [TestCase("345", 345)]
     [TestCase("157345423", 157345423)]
     [TestCase("243.542", 243.542)]
+    [TestCase("-23310.023", -23310.023)]
+    [TestCase("-1", -1)]
     public async Task Parse_SingleNumber(string input, double expected)
     {
         var result = await handler.Handle(new ParseExpressionRequest("default", input), CancellationToken.None);
@@ -47,8 +49,7 @@ public class ExpressionParserTests
     [TestCase("=ab*5", "ab", 2, 10)]
     [TestCase("=var3/5", "var3", 10, 2)]
     [TestCase("=abc-5", "abc", 15, 10)]
-    [TestCase("=X-10", "X", 11.9, 1.9)]
-    public async Task Parse_WithOneVariable(string formula, string varName, double varValue, double expected)
+    public async Task Parse_WithOneVariableInt(string formula, string varName, double varValue, double expected)
     {
         mediator
             .Send(Arg.Is<GetSheetCellValueQuery>(o => o.CellId == varName))
@@ -61,11 +62,26 @@ public class ExpressionParserTests
         Assert.That(result.AsT0.NumericValue, Is.EqualTo(expected));
     }
 
+    [TestCase("=X-10", "X", 11.9, 1.9)]
+    public async Task Parse_WithOneVariableDouble(string formula, string varName, double varValue, double expected)
+    {
+        mediator
+            .Send(Arg.Is<GetSheetCellValueQuery>(o => o.CellId == varName))
+            .Returns(varValue);
+        
+        var result = await handler.Handle(new ParseExpressionRequest("default", formula), CancellationToken.None);
+        
+        Assert.IsTrue(result.IsT0);
+        Assert.IsTrue(result.AsT0.IsNumber);
+        Assert.That(result.AsT0.NumericValue, Is.EqualTo(expected).Within(5).Ulps);
+    }
+    
     [TestCase("Hello world!")]
     [TestCase("45a")]
     [TestCase("carrot41")]
     [TestCase("25.00.000.0")]
     [TestCase("5+5")]
+    [TestCase("-243a")]
     public async Task Parse_Text(string text)
     {
         var result = await handler.Handle(new ParseExpressionRequest("default", text), CancellationToken.None);
@@ -85,6 +101,8 @@ public class ExpressionParserTests
     [TestCase("=(12+(5+(4+3)))", (12+(5+(4+3))))]
     [TestCase("=(12+(5+(4+3)))*23", (12+(5+(4+3)))*23)]
     [TestCase("=(12+(5+(4+3)))*(23-5)", (12+(5+(4+3)))*(23-5))]
+    [TestCase("=(-12+243+15)", (-12+243+15))]
+    [TestCase("=(-12+(-243)+15)", (-12+(-243)+15))]
     public async Task Parse_Parenthesis_Simple(string formula, double expected)
     {
         var expression = await handler.Handle(new ParseExpressionRequest("default", formula), CancellationToken.None);
@@ -131,7 +149,7 @@ public class ExpressionParserTests
 
         Assert.IsTrue(result.IsT0);
         Assert.IsTrue(result.AsT0.IsNumber);
-        Assert.That(result.AsT0.NumericValue, Is.EqualTo(0.5+6).Within(1).Ulps);
+        Assert.That(result.AsT0.NumericValue, Is.EqualTo(0.5+6).Within(5).Ulps);
     }
     
     

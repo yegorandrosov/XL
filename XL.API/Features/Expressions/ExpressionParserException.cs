@@ -1,4 +1,4 @@
-﻿namespace XL.API.Features.Parser;
+﻿namespace XL.API.Features.Expressions;
 
 public class ExpressionParserException : Exception
 {

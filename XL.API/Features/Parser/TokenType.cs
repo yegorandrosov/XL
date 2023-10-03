@@ -1,4 +1,4 @@
-﻿namespace XL.API;
+﻿namespace XL.API.Features.Parser;
 
 public enum TokenType
 {

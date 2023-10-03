@@ -1,6 +1,6 @@
 ﻿using System.Text;
 
-namespace XL.API;
+namespace XL.API.Features.Parser;
 
 public class Expression
 {

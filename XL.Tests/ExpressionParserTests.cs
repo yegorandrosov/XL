@@ -1,3 +1,5 @@
+using XL.API.Features.Parser;
+
 namespace XL.Tests;
 
 [Timeout(1000)]

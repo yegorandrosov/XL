@@ -8,5 +8,7 @@ public enum TokenType
     Digit,
     FormulaSign,
     Variable,
-    Text
+    Text,
+    OpeningParenthesis,
+    ClosingParenthesis,
 }

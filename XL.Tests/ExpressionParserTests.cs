@@ -60,7 +60,7 @@ public class ExpressionParserTests
     [TestCaseSource(nameof(SingleDigit))]
     public void Parse_SingleNumber(string digit, double value)
     {
-        var expression = parser.ParseExpression(digit);
+        var expression = parser.Parse(digit);
         Assert.Multiple(() =>
         {
             Assert.That(expression.AsEnumerable().Count(), Is.EqualTo(1));
@@ -72,9 +72,10 @@ public class ExpressionParserTests
     [TestCase("=1492+1001+467471", 469964)]
     [TestCase("=432*22/321+1323-2483", -1130.392523364486)]
     [TestCase("=43-10.5", 32.5)]
+    [TestCase("=1+1+1", 3)]
     public void Parse_Add(string formula, double result)
     {
-        var expression = parser.ParseExpression(formula);
+        var expression = parser.Parse(formula);
         
         Assert.Multiple(() =>
         {
@@ -94,7 +95,7 @@ public class ExpressionParserTests
     {
         context.GetReferenceValue(varName).Returns(varValue);
 
-        var expression = parser.ParseExpression(formula);
+        var expression = parser.Parse(formula);
         
         Assert.That(expression.NumericValue, Is.EqualTo(result).Within(5).Ulps);
         
@@ -108,8 +109,62 @@ public class ExpressionParserTests
     [TestCase("5+5")]
     public void Parse_Text(string text)
     {
-        var expression = parser.ParseExpression(text);
+        var expression = parser.Parse(text);
         
         Assert.That(expression.StringValue, Is.EqualTo(text));
+    }
+
+    [TestCase("=(1+1)", 1+1)]
+    [TestCase("=(5*4)", 5*4)]
+    [TestCase("=(1-5)", 1-5)]
+    [TestCase("=(1+6)*2", 7*2)]
+    [TestCase("=(2+3)*(5-2)", (2+3)*(5-2))]
+    [TestCase("=(10/5)-3*(4+3)", (10/5)-3*(4+3))]
+    [TestCase("=10/5-3*(4+3)", (10/5)-3*(4+3))]
+    [TestCase("=(12+(5+(4+3)))", (12+(5+(4+3))))]
+    [TestCase("=(12+(5+(4+3)))*23", (12+(5+(4+3)))*23)]
+    [TestCase("=(12+(5+(4+3)))*(23-5)", (12+(5+(4+3)))*(23-5))]
+    public void Parse_Parenthesis_Simple(string formula, double expected)
+    {
+        var expression = parser.Parse(formula);
+        
+        Assert.That(expression.NumericValue, Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void Parse_Formula_WithManyVars()
+    {
+        context.GetReferenceValue("abc").Returns(5);
+        context.GetReferenceValue("A3").Returns(4);
+        context.GetReferenceValue("text").Returns(3);
+
+        var expression = parser.Parse("=abc+A3+text");
+
+        const int expected = 5 + 4 + 3;
+        
+        Assert.That(expression.NumericValue, Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void Parse_Formula_Mix()
+    {
+        context.GetReferenceValue("abc").Returns(5);
+        context.GetReferenceValue("A3").Returns(10);
+        context.GetReferenceValue("text").Returns(60);
+
+        var expression = parser.Parse("=(abc/A3)+(text/(5*2))");
+        
+        Assert.That(expression.NumericValue, Is.EqualTo(0.5+6).Within(1).Ulps);
+    }
+    
+    
+    [Test]
+    public void Parse_SameVariableMultipleTimes()
+    {
+        context.GetReferenceValue("abc").Returns(5);
+
+        var expression = parser.Parse("=abc*abc*abc-abc");
+        
+        Assert.That(expression.NumericValue, Is.EqualTo(5*5*5-5).Within(1).Ulps);
     }
 }

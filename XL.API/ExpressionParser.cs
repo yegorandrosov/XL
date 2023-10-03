@@ -16,7 +16,18 @@ namespace XL.API
             this.context = context;
         }
         
-        public Expression ParseExpression(string expression)
+        public Expression Parse(string expression)
+        {
+            return Parse(expression, true);
+        }
+
+        public bool TryParse(string expression, out Expression exp)
+        {
+            exp = Parse(expression, false);
+            return !exp.IsError;
+        }
+
+        private Expression Parse(string expression, bool throwOnParsingError)
         {
             var tokens = ParseTokens(expression);
             var root = ConvertTokensToExpression(tokens);
@@ -31,12 +42,16 @@ namespace XL.API
                 if (root.IsFormula)
                 {
                     ReplaceVariablesFromContext(root);
+
+                    ReplaceNestedExpressions(root);
+                    
                     return TryCalculateExpression(root.Next);
                 }
             }
             catch (Exception)
             {
-                // ignored
+                if (throwOnParsingError)
+                    throw;
             }
 
             root.IsError = true;
@@ -70,16 +85,19 @@ namespace XL.API
                     current.Next.Previous = newExpression;
 
                 current = newExpression.Next;
-            } while (current.Next != null);
+            } while (current != null);
         }
 
         private Expression TryCalculateExpression(Expression exp)
         {
+            if (exp is null)
+                throw new ArgumentNullException(nameof(exp));
+            
             var start = exp;
             var current = exp;
             Expression? highPrio;  // operation that must be executed first
             int opCount;
-
+            
             do
             {
                 opCount = 0;
@@ -87,11 +105,7 @@ namespace XL.API
                 
                 do
                 {
-                    // if (current.IsOpeningParentheses)
-                    // {
-                    //     TryCalculateExpression(current.Next);
-                    // }
-                    //
+                    
                     if (current.IsBinaryOperand)
                     {
                         opCount++;
@@ -102,36 +116,16 @@ namespace XL.API
                     }
 
                     current = current.Next;
-                } while (current != null);
+                } while (current is { IsClosingParentheses: false });
+
+                if (opCount == 0 || highPrio == null)
+                    return start;
                 
                 // calculate high prio
                 var previousArg = highPrio.Previous;
                 var nextArg = highPrio.Next;
 
-                var result = highPrio.Tokens[0].Value switch
-                {
-                    '*' => previousArg.NumericValue * nextArg.NumericValue,
-                    '/' => previousArg.NumericValue / nextArg.NumericValue,
-                    '-' => previousArg.NumericValue - nextArg.NumericValue,
-                    '+' => previousArg.NumericValue + nextArg.NumericValue,
-                    _ => throw new ArgumentException(),
-                };
-
-                var newExpr = new Expression()
-                {
-                    Tokens = result.ToString().Select(x => new Token(x, TokenType.Digit)).ToList()
-                };
-
-                newExpr.Previous = previousArg.Previous.IsOpeningParentheses ? 
-                    previousArg.Previous.Previous : previousArg.Previous;
-                
-                previousArg.Previous.Next = newExpr;
-                
-                if (nextArg.Next != null)
-                {
-                    nextArg.Next.Previous = newExpr;
-                    newExpr.Next = nextArg.Next.IsClosingParentheses ? nextArg.Next.Next : nextArg.Next;
-                }
+                var newExpr = CalculateAndReplaceHighPriorityExpression(highPrio, previousArg, nextArg);
 
                 opCount--;
                 if (previousArg == start)
@@ -145,6 +139,85 @@ namespace XL.API
             } while (opCount > 0);
 
             return start;
+        }
+
+        private static Expression CalculateAndReplaceHighPriorityExpression(Expression highPrio, Expression? previousArg,
+            Expression? nextArg)
+        {
+            var result = highPrio.Tokens[0].Value switch
+            {
+                '*' => previousArg.NumericValue * nextArg.NumericValue,
+                '/' => previousArg.NumericValue / nextArg.NumericValue,
+                '-' => previousArg.NumericValue - nextArg.NumericValue,
+                '+' => previousArg.NumericValue + nextArg.NumericValue,
+                _ => throw new ArgumentException(),
+            };
+
+            var newExpr = new Expression()
+            {
+                Tokens = result.ToString().Select(x => new Token(x, TokenType.Digit)).ToList()
+            };
+
+            newExpr.Previous = previousArg.Previous.IsOpeningParentheses ? previousArg.Previous.Previous : previousArg.Previous;
+
+            previousArg.Previous.Next = newExpr;
+
+            if (nextArg.Next != null)
+            {
+                nextArg.Next.Previous = newExpr;
+                newExpr.Next = nextArg.Next.IsClosingParentheses ? nextArg.Next.Next : nextArg.Next;
+            }
+
+            return newExpr;
+        }
+
+        private void ReplaceNestedExpressions(Expression exp)
+        {
+            var current = exp;
+            var replaced = false;
+
+            var map = new List<(int, Expression)>();
+
+            var level = 0;
+            do
+            {
+                if (current.IsOpeningParentheses)
+                {
+                    level++;
+                    map.Add((level, current));
+                }
+
+                if (current.IsClosingParentheses)
+                {
+                    level--;
+                }
+                
+                current = current.Next;
+            } while (current != null);
+
+            foreach (var expression in map.OrderByDescending(x => x.Item1))
+            {
+                ReplaceNestedExpression(expression.Item2);
+            }
+        }
+
+        private void ReplaceNestedExpression(Expression current)
+        {
+            do
+            {
+                if (current.IsOpeningParentheses)
+                {
+                    var nestedExpr = TryCalculateExpression(current.Next);
+                    nestedExpr.Next = current.Next.Next; // +1 next for closing parenthesis
+                    nestedExpr.Previous = current.Previous;
+
+                    current.Previous!.Next = nestedExpr;
+                    if (current.Next.Next != null)
+                        current.Next.Next.Previous = nestedExpr;
+                }
+
+                current = current.Next;
+            } while (current is { IsClosingParentheses: false });
         }
 
         private Expression ConvertTokensToExpression(List<Token> tokens)
@@ -243,15 +316,22 @@ namespace XL.API
                 if (token == '.')
                     return TokenType.Digit;
 
+                if (token.IsClosingParenthesis())
+                    return TokenType.ClosingParenthesis;
+                
                 return TokenType.Text;
             }
-            else if (previous.Type == TokenType.BinaryOperand)
+
+            if (previous.Type == TokenType.BinaryOperand)
             {
                 if (char.IsDigit(token))
                     return TokenType.Digit;
                 
                 if (token.IsText())
                     return TokenType.Variable;
+
+                if (token.IsOpeningParenthesis())
+                    return TokenType.OpeningParenthesis;
             }
             else if (previous.Type == TokenType.FormulaSign)
             {
@@ -260,6 +340,9 @@ namespace XL.API
                 
                 if (token.IsText())
                     return TokenType.Variable;
+                
+                if (token.IsOpeningParenthesis())
+                    return TokenType.OpeningParenthesis;
             }
             else if (previous.Type == TokenType.Variable)
             {
@@ -271,10 +354,32 @@ namespace XL.API
                 
                 if (token.IsBinaryOperand())
                     return TokenType.BinaryOperand;
+                
+                if (token.IsClosingParenthesis())
+                    return TokenType.ClosingParenthesis;
             }
             else if (previous.Type == TokenType.Text)
             {
                 return TokenType.Text;
+            }
+            else if (previous.Type == TokenType.ClosingParenthesis)
+            {
+                if (token.IsBinaryOperand())
+                    return TokenType.BinaryOperand;
+                
+                if (token.IsClosingParenthesis())
+                    return TokenType.ClosingParenthesis;
+            }
+            else if (previous.Type == TokenType.OpeningParenthesis)
+            {
+                if (token.IsOpeningParenthesis())
+                    return TokenType.OpeningParenthesis;
+
+                if (char.IsDigit(token))
+                    return TokenType.Digit;
+
+                if (token.IsText())
+                    return TokenType.Variable;
             }
 
             return TokenType.InvalidToken;
@@ -291,6 +396,8 @@ namespace XL.API
                 TokenType.FormulaSign => false,
                 TokenType.Variable => true,
                 TokenType.Text => true,
+                TokenType.OpeningParenthesis => false,
+                TokenType.ClosingParenthesis => false,
                 _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
             };
         }
@@ -320,6 +427,16 @@ namespace XL.API
         public static bool IsText(this char c)
         {
             return c is >= 'a' and <= 'z' or >= 'A' and <= 'Z';
+        }
+
+        public static bool IsClosingParenthesis(this char c)
+        {
+            return c is ')';
+        }
+
+        public static bool IsOpeningParenthesis(this char c)
+        {
+            return c is '(';
         }
     }
 }

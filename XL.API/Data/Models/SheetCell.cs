@@ -7,9 +7,7 @@ public class SheetCell
     public string SheetId { get; set; } = null!;
     public string CellId { get; set; } = null!;
     public string Expression { get; set; } = null!;
-    public string Value { get; set; } = null!;
-    public int Level { get; set; }
-
+    public double? NumericValue { get; set; } 
     public virtual ICollection<SheetCellReference> Callers { get; set; } = new List<SheetCellReference>();
     public virtual ICollection<SheetCellReference> Arguments { get; set; } = new List<SheetCellReference>();
 }

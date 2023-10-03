@@ -38,9 +38,7 @@ public sealed class CreateSheetCell
                 {
                     SheetId = request.SheetId,
                     CellId = request.CellId,
-                    Value = request.Value,
                     Expression = request.Value,
-                    Level = 1
                 }).Entity;
 
                 await context.SaveChangesAsync(cancellationToken);
@@ -77,7 +75,6 @@ public sealed class CreateSheetCell
 
                 return result.Match(success => Results.Ok(success.Value), 
                     alreadyExists => Results.Conflict(alreadyExists.Value));
-                
             })
             .WithName(nameof(CreateSheetCell))
             .Produces(StatusCodes.Status409Conflict)

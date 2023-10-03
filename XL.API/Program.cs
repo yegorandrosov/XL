@@ -34,7 +34,6 @@ app.MapGet("/", () => "Hello World!");
 
 app.Run();
 
-// https://stackoverflow.com/questions/77180710/carter-modules-are-not-registered-in-asp-net-core-app/77181052#77181052
 static Type[] DiscoverCarterModules()
 {
     var catalog = new DependencyContextAssemblyCatalog();

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using XL.API.Data;
 using Carter;
 using Microsoft.OpenApi.Models;
+using XL.API.Features.Cells;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,6 +15,11 @@ builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "XL API", Version = "v1" });
     c.CustomSchemaIds(s => s.FullName.Replace("+", "."));
+});
+
+builder.Services.AddAutoMapper(builder =>
+{
+    builder.AddProfile<CellMappingProfile>();
 });
 
 builder.Services.AddCarter(configurator: c =>

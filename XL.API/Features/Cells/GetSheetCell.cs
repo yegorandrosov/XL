@@ -1,4 +1,5 @@
-﻿using Carter;
+﻿using AutoMapper;
+using Carter;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using XL.API.Data;
@@ -14,9 +15,9 @@ namespace XL.API.Features.Cells;
 
 public static class GetSheetCell
 {
-    public record Command(string SheetId, string CellId) : IRequest<OneOf<Success<SheetCell>, NotFound>>;
+    public record Command(string SheetId, string CellId) : IRequest<OneOf<CommandHelperClasses<SheetCell>, NotFound>>;
 
-    public class Handler : IRequestHandler<Command, OneOf<Success<SheetCell>, NotFound>>
+    public class Handler : IRequestHandler<Command, OneOf<CommandHelperClasses<SheetCell>, NotFound>>
     {
         private readonly ApplicationDbContext context;
 
@@ -25,7 +26,7 @@ public static class GetSheetCell
             this.context = context;
         }
 
-        public async Task<OneOf<Success<SheetCell>, NotFound>> Handle(Command request, CancellationToken cancellationToken)
+        public async Task<OneOf<CommandHelperClasses<SheetCell>, NotFound>> Handle(Command request, CancellationToken cancellationToken)
         {
             var sheetCell = await context.SheetCells.FirstOrDefaultAsync(x => x.SheetId == request.SheetId && x.CellId == request.CellId, cancellationToken: cancellationToken);
 
@@ -43,11 +44,11 @@ public static class GetSheetCell
         public void AddRoutes(IEndpointRouteBuilder app)
         {
             app.MapGet("/api/v1/{sheetId}/{cellId}", 
-                async ([FromBody]Command command, IMediator mediator) =>
+                async ([FromBody]Command command, IMediator mediator, IMapper mapper) =>
                 {
                     var result = await mediator.Send(command);
                     return result.Match(
-                        cell => Results.Ok(cell), 
+                        cell => Results.Ok(mapper.Map<CellApiResponse>(cell.Value)), 
                         _ => Results.NotFound());
                 });
         }

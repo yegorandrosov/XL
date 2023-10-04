@@ -1,4 +1,5 @@
-﻿using Carter;
+﻿using AutoMapper;
+using Carter;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using XL.API.Data;
@@ -45,11 +46,15 @@ public class GetSheet
         public void AddRoutes(IEndpointRouteBuilder app)
         {
             app.MapGet("/api/v1/{sheetId}", 
-                async ([FromBody]Command command, IMediator mediator) =>
+                async ([FromBody]Command command, IMediator mediator, IMapper mapper) =>
                 {
                     var result = await mediator.Send(command);
                     return result.Match(
-                        cell => Results.Ok(cell), 
+                        cell =>
+                        {
+                            var map = cell.Cells.ToDictionary(x => x.CellId, x => mapper.Map<CellApiResponse>(x));
+                            return Results.Ok(map);
+                        }, 
                         _ => Results.NotFound());
                 });
         }

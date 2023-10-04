@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics.CodeAnalysis;
+using AutoMapper;
 using Carter;
 using Carter.OpenApi;
 using Microsoft.AspNetCore.Mvc;
@@ -14,9 +15,9 @@ namespace XL.API.Features.Cells;
 
 public sealed class UpsertSheetCell
 {
-    public record Command(string SheetId, string CellId, string Value) : IRequest<OneOf<Success<SheetCell>, Unprocessable>>;
+    public record Command(string SheetId, string CellId, string Value) : IRequest<OneOf<CommandHelperClasses<SheetCell>, Unprocessable>>;
 
-    public class Handler : IRequestHandler<Command, OneOf<Success<SheetCell>, Unprocessable>>
+    public class Handler : IRequestHandler<Command, OneOf<CommandHelperClasses<SheetCell>, Unprocessable>>
     {
         private readonly ApplicationDbContext context;
         private readonly IMediator mediator;
@@ -30,7 +31,7 @@ public sealed class UpsertSheetCell
             this.sheetCellRepository = sheetCellRepository;
         }
 
-        public async Task<OneOf<Success<SheetCell>, Unprocessable>> Handle(Command request, CancellationToken cancellationToken)
+        public async Task<OneOf<CommandHelperClasses<SheetCell>, Unprocessable>> Handle(Command request, CancellationToken cancellationToken)
         {
             var expression = await mediator.Send(new ParseExpressionRequest(request.Value), cancellationToken);
             if (expression.IsError)
@@ -169,16 +170,23 @@ public sealed class UpsertSheetCell
         public void AddRoutes(IEndpointRouteBuilder app)
         {
             app.MapPost("/api/v1/{sheetId}/{cellId}", 
-                async ([FromBody]Command command, IMediator mediator) =>
+                async ([FromBody]Command command, IMediator mediator, IMapper mapper) =>
             {
                 var result = await mediator.Send(command);
 
-                return result.Match(success => Results.Ok(success.Value), 
-                    _ => Results.UnprocessableEntity());
+                return result.Match(success =>
+                {
+                    var responseObj = mapper.Map<CellApiResponse>(success.Value);
+                    return Results.Created($"/api/v1/{command.SheetId}/{command.CellId}", responseObj);
+                }, 
+                _ => Results.UnprocessableEntity(new CellApiResponse()
+                {
+                    Value = command.Value,
+                    Result = "ERROR"
+                }));
             })
             .WithName(nameof(UpsertSheetCell))
-            .Produces(StatusCodes.Status409Conflict)
-            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status422UnprocessableEntity)
             .IncludeInOpenApi();
         }

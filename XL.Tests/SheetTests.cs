@@ -42,7 +42,7 @@ public class SheetIntegrationTests
             .Returns(arg => valueProvider.Handle(arg.Arg<GetSheetCellValueQuery>(), CancellationToken.None));
     }
 
-    private async Task<OneOf<Success<SheetCell>, Unprocessable>> UpsertCell(string cellId, string sheetId, string expression)
+    private async Task<OneOf<CommandHelperClasses<SheetCell>, Unprocessable>> UpsertCell(string cellId, string sheetId, string expression)
     {
         return await handler.Handle(new UpsertSheetCell.Command(sheetId, cellId, expression), CancellationToken.None);
     }

@@ -44,7 +44,7 @@ public class ExpressionParserTests
 
     [TestCase("=1+1", 2)]
     [TestCase("=1492+1001+467471", 469964)]
-    [TestCase("=432*22/321+1323-2483", 432*22/321+1323-2483)]
+    [TestCase("=432*22/321+1323-2483", -1130.392523364485)]
     [TestCase("=43-10.5", 32.5)]
     [TestCase("=1+1+1", 3)]
     public async Task Parse_Add(string formula, decimal expected)
@@ -54,7 +54,7 @@ public class ExpressionParserTests
         var result = await evaluator.Handle(new EvaluateExpressionRequest("default", expression), CancellationToken.None);
         
         Assert.IsTrue(result.IsSuccess);
-        Assert.That(result.NumericValue, Is.EqualTo(expected));
+        Assert.That(result.NumericValue, Is.EqualTo(expected).Within(0.0000001));
     }
 
     [TestCase("=a+3", "a", 2, 5)]

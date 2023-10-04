@@ -49,8 +49,15 @@ public sealed class UpsertSheetCell
                 {
                     return new Unprocessable();
                 }
-                
-                Update(cell, request.Value, evaluatedExpression);
+
+                try
+                {
+                    await Update(cell, request.Value, evaluatedExpression);
+                }
+                catch
+                {
+                    return new Unprocessable();
+                }
             }
             else
             {
@@ -88,9 +95,48 @@ public sealed class UpsertSheetCell
             return cell;
         }
 
-        private void Update(SheetCell cell, string stringExpression, Expression parsedExpression)
+        private async Task Update(SheetCell cell, string stringExpression, Expression expression)
         {
-            
+            cell.Expression = stringExpression;
+            cell.NumericValue = expression.IsNumber ? expression.NumericValue : null;
+            cell.Arguments.Clear();
+
+            foreach (var depCellId in expression.DependentVariables)
+            {
+                var argumentCell = await sheetCellRepository.Find(cell.SheetId, depCellId);
+                                
+                cell.Arguments.Add(new SheetCellReference()
+                {
+                    Child = argumentCell,
+                    Parent = cell
+                });
+            }
+
+            await sheetCellRepository.Update(cell);
+            context.SheetCells.Update(cell);
+
+            await UpdateCallingExpressions(cell);
+        }
+
+        private async Task UpdateCallingExpressions(SheetCell cell)
+        {
+            foreach (var cellRef in cell.Callers)
+            {
+                var caller = cellRef.Parent;
+
+                var parsedExpression = await mediator.Send(new ParseExpressionRequest(caller.Expression));
+                if (parsedExpression.IsError)
+                    throw new Exception("Expression could not be parsed");
+                var evaluatedExpression =
+                    await mediator.Send(new EvaluateExpressionRequest(caller.SheetId, parsedExpression));
+                if (evaluatedExpression.IsError)
+                    throw new Exception("Expression could not be parsed");
+
+                if (caller.NumericValue != evaluatedExpression.NumericValue)
+                {
+                    await Update(caller, caller.Expression, evaluatedExpression);
+                }
+            }
         }
     }
 

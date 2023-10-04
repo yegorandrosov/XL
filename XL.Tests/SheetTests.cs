@@ -95,14 +95,19 @@ public class SheetIntegrationTests
     {
         var sheetName = nameof(CreateOneCellAndOverride_Success);
         var result1 = await UpsertCell("cell234", sheetName, "15");
-        var result2 = await UpsertCell("cell234", sheetName, "=25+15");
             
             
         Assert.IsTrue(result1.IsSuccess());
         Assert.That(result1.AsT0.Value.NumericValue, Is.EqualTo(15));
         
+        var result2 = await UpsertCell("cell234", sheetName, "=25+15");
+        
         Assert.IsTrue(result2.IsSuccess());
         Assert.That(result2.AsT0.Value.NumericValue, Is.EqualTo(40));
+        
+        var cell = applicationDbContext.SheetCells.FirstOrDefault(x => x.CellId == "cell234" && x.SheetId == sheetName);
+
+        Assert.That(cell.NumericValue, Is.EqualTo(40));
     }
     
     
@@ -178,9 +183,14 @@ public class SheetIntegrationTests
 
         Assert.That(cell.NumericValue, Is.EqualTo(40));
         
-        cell = applicationDbContext.SheetCells.FirstOrDefault(x => x.CellId == "cell234" && x.SheetId == sheetName);
+        cell = GetCellFromDb("cell234", sheetName);
 
         Assert.That(cell.NumericValue, Is.EqualTo(920));
+    }
+
+    private SheetCell? GetCellFromDb(string cellId, string sheetName)
+    {
+        return applicationDbContext.SheetCells.FirstOrDefault(x => x.CellId == cellId && x.SheetId == sheetName);
     }
 
     [Test]
@@ -195,5 +205,47 @@ public class SheetIntegrationTests
         Assert.IsTrue(result1.IsSuccess());
         Assert.IsTrue(result2.IsSuccess());
         Assert.IsTrue(result3.IsError());
+    }
+
+    [Test]
+    public async Task CreateThreeCellsAndReplaceMiddle_Success()
+    {
+        var sheetName = nameof(CreateThreeCellsAndReplaceMiddle_Success);
+
+        var result1 = await UpsertCell("cell123", sheetName, "-15");
+        Assert.IsTrue(result1.IsSuccess());
+        Assert.That(result1.AsT0.Value.NumericValue, Is.EqualTo(-15));
+
+        var result2 = await UpsertCell("cell124", sheetName, "=cell123+115");
+        Assert.IsTrue(result2.IsSuccess());
+        Assert.That(result2.AsT0.Value.NumericValue, Is.EqualTo(100));
+
+        var result3 = await UpsertCell("cell125", sheetName, "=cell124+115");
+        Assert.IsTrue(result3.IsSuccess());
+        Assert.That(result3.AsT0.Value.NumericValue, Is.EqualTo(215));
+
+        var result4 = await UpsertCell("cell126", sheetName, "=cell125+115");
+        Assert.IsTrue(result4.IsSuccess());
+        Assert.That(result4.AsT0.Value.NumericValue, Is.EqualTo(330));
+
+        var result5 = await UpsertCell("cell125", sheetName, "=-10");
+        Assert.IsTrue(result5.IsSuccess());       
+        Assert.That(result5.AsT0.Value.NumericValue, Is.EqualTo(-10));
+
+        var cell = GetCellFromDb("cell123", sheetName);
+        
+        Assert.That(cell.NumericValue, Is.EqualTo(-15));
+        
+        cell = GetCellFromDb("cell124", sheetName);
+        
+        Assert.That(cell.NumericValue, Is.EqualTo(100));
+        
+        cell = GetCellFromDb("cell125", sheetName);
+
+        Assert.That(cell.NumericValue, Is.EqualTo(-10));
+
+        cell = GetCellFromDb("cell126", sheetName);
+        
+        Assert.That(cell.NumericValue, Is.EqualTo(105));
     }
 }

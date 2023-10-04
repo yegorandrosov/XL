@@ -6,6 +6,7 @@ namespace XL.API.Data.Cache;
 public interface ISheetCellRepository
 {
     Task<SheetCell?> Find(string sheetId, string cellId);
+    Task Update(SheetCell sheetCell);
 }
 
 public class SheetCellCacheRepository : ISheetCellRepository
@@ -31,5 +32,13 @@ public class SheetCellCacheRepository : ISheetCellRepository
             .FirstOrDefaultAsync(x => x.SheetId == sheetId && x.CellId == cellId);
         cache[cacheKey] = cell;
         return cell;
+    }
+
+    public Task Update(SheetCell sheetCell)
+    {
+        var cacheKey = $"{sheetCell.SheetId}/{sheetCell.CellId}";
+        cache[cacheKey] = sheetCell;
+
+        return Task.CompletedTask;
     }
 }

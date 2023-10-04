@@ -2,12 +2,16 @@ version: '3.4'
 
 services:
   xl.api:
+    container_name: XL.API
     image: ${DOCKER_REGISTRY-}xlapi
     build:
       context: .
       dockerfile: XL.API/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
     ports:
-      - "8080:80"
+      - "8080:8080"
 
   sql:
     image: mcr.microsoft.com/mssql/server:2019-latest

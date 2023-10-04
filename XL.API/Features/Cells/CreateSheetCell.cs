@@ -31,15 +31,14 @@ public sealed class CreateSheetCell
 
         public async Task<OneOf<Success<SheetCell>, AlreadyExists<SheetCell>, Unprocessable>> Handle(Command request, CancellationToken cancellationToken)
         {
-            var result = await mediator.Send(new ParseExpressionRequest(request.SheetId, request.Value), cancellationToken);
-            if (result.IsT1)
+            var expression = await mediator.Send(new ParseExpressionRequest(request.Value), cancellationToken);
+            if (expression.IsError)
                 return new Unprocessable();
-            var expression = result.AsT0;
-
+            
             var cell = await sheetCellRepository.Find(request.SheetId, request.CellId);
             if (cell != null)
-            {
-                Update(cell, request.Value);
+            {if (expression.DependentVariables.Any(cell.))
+                Update(cell, request.Value, expression);
             }
             else
             {
@@ -77,7 +76,7 @@ public sealed class CreateSheetCell
             return cell;
         }
 
-        private void Update(SheetCell cell, string expression)
+        private void Update(SheetCell cell, string stringExpression, Expression parsedExpression)
         {
             
         }

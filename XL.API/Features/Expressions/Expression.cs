@@ -26,6 +26,8 @@ public class Expression
         _ => throw new ArgumentOutOfRangeException()
     };
     
+    public bool IsError { get; set; }
+    
     public string StringValue => StringBuilderValue.ToString();
 
     public StringBuilder StringBuilderValue

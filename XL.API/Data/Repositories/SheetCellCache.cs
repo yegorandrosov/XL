@@ -25,7 +25,10 @@ public class SheetCellCacheRepository : ISheetCellRepository
         if (cell != null)
             return cell;
 
-        cell = await context.SheetCells.FirstOrDefaultAsync(x => x.SheetId == sheetId && x.CellId == cellId);
+        cell = await context.SheetCells
+            .Include(x => x.Arguments)
+            .Include(x => x.Callers)
+            .FirstOrDefaultAsync(x => x.SheetId == sheetId && x.CellId == cellId);
         cache[cacheKey] = cell;
         return cell;
     }

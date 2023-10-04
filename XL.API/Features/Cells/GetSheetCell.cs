@@ -1,5 +1,6 @@
 ﻿using AutoMapper;
 using Carter;
+using Carter.OpenApi;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using XL.API.Data;
@@ -44,13 +45,18 @@ public static class GetSheetCell
         public void AddRoutes(IEndpointRouteBuilder app)
         {
             app.MapGet("/api/v1/{sheetId}/{cellId}", 
-                async ([FromBody]Command command, IMediator mediator, IMapper mapper) =>
-                {
-                    var result = await mediator.Send(command);
-                    return result.Match(
-                        cell => Results.Ok(mapper.Map<CellApiResponse>(cell.Value)), 
-                        _ => Results.NotFound());
-                });
+                async ([FromRoute]string sheetId, [FromRoute]string cellId, IMediator mediator, IMapper mapper) =>
+            {
+                var command = new Command(sheetId, cellId);
+                var result = await mediator.Send(command);
+                return result.Match(
+                    cell => Results.Ok(mapper.Map<CellApiResponse>(cell.Value)), 
+                    _ => Results.NotFound());
+            })
+            .WithName(nameof(GetSheetCell))
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound)
+            .IncludeInOpenApi();
         }
     }
 }

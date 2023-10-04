@@ -6,3 +6,8 @@ public class CellApiResponse
     
     public string Result { get; set; }
 }
+
+public class CellApiRequest
+{
+    public string Value { get; set; }
+}

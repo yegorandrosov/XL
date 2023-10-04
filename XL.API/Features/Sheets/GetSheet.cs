@@ -1,9 +1,11 @@
 ﻿using AutoMapper;
 using Carter;
+using Carter.OpenApi;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using XL.API.Data;
 using XL.API.Data.Models;
+using XL.API.Features.Cells;
 using XL.API.Models;
 // ReSharper disable ConvertClosureToMethodGroup
 // ReSharper disable RouteTemplates.RouteParameterConstraintNotResolved
@@ -46,17 +48,22 @@ public class GetSheet
         public void AddRoutes(IEndpointRouteBuilder app)
         {
             app.MapGet("/api/v1/{sheetId}", 
-                async ([FromBody]Command command, IMediator mediator, IMapper mapper) =>
-                {
-                    var result = await mediator.Send(command);
-                    return result.Match(
-                        cell =>
-                        {
-                            var map = cell.Cells.ToDictionary(x => x.CellId, x => mapper.Map<CellApiResponse>(x));
-                            return Results.Ok(map);
-                        }, 
-                        _ => Results.NotFound());
-                });
+                async ([FromRoute]string sheetId, IMediator mediator, IMapper mapper) =>
+            {
+                var command = new Command(sheetId);
+                var result = await mediator.Send(command);
+                return result.Match(
+                    cell =>
+                    {
+                        var map = cell.Cells.ToDictionary(x => x.CellId, x => mapper.Map<CellApiResponse>(x));
+                        return Results.Ok(map);
+                    }, 
+                    _ => Results.NotFound());
+            })
+            .WithName(nameof(GetSheet))
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound)
+            .IncludeInOpenApi();
         }
     }
 }

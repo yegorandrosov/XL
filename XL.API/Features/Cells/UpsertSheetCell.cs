@@ -170,8 +170,9 @@ public sealed class UpsertSheetCell
         public void AddRoutes(IEndpointRouteBuilder app)
         {
             app.MapPost("/api/v1/{sheetId}/{cellId}", 
-                async ([FromBody]Command command, IMediator mediator, IMapper mapper) =>
+                async ([FromRoute]string sheetId, [FromRoute]string cellId, [FromBody]CellApiRequest request, IMediator mediator, IMapper mapper) =>
             {
+                var command = new Command(sheetId, cellId, request.Value);
                 var result = await mediator.Send(command);
 
                 return result.Match(success =>

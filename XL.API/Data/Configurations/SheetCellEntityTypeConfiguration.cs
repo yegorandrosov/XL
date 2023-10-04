@@ -11,5 +11,7 @@ public class SheetCellEntityTypeConfiguration : IEntityTypeConfiguration<SheetCe
         builder.HasKey(x => x.Id);
 
         builder.HasIndex(x => new { x.SheetId, x.CellId }).IsUnique();
+
+        builder.Property(x => x.NumericValue).HasPrecision(10);
     }
 }

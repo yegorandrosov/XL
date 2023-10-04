@@ -3,6 +3,7 @@ using XL.API.Data;
 using Carter;
 using Microsoft.OpenApi.Models;
 using XL.API.Features.Cells;
+using XL.API.Data.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -26,6 +27,7 @@ builder.Services.AddCarter(configurator: c =>
 {
     c.WithModules(DiscoverCarterModules());
 });
+builder.Services.AddScoped<ISheetCellRepository, SheetCellCacheRepository>();
 
 var app = builder.Build();
 
@@ -36,7 +38,7 @@ app.UseSwaggerUI();
 
 app.MapCarter();
 
-app.MapGet("/", () => "Hello World!");
+app.MapGet("/", () => "Hello, World!").ExcludeFromDescription();
 
 app.Run();
 

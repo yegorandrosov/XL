@@ -4,7 +4,7 @@ using System.Globalization;
 namespace XL.API.Features.Expressions;
 
 public record ParserError;
-
+public record ParseExpressionRequest(string SheetId, string Expression) : IRequest<OneOf<Expression, ParserError>>;
 public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequest, OneOf<Expression, ParserError>>
 {
     private readonly IMediator mediator;
@@ -16,10 +16,11 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
         
     public async Task<OneOf<Expression, ParserError>> Handle(ParseExpressionRequest request, CancellationToken cancellationToken)
     {
-        var tokens = ParseTokens(request.Expression);
-        var root = ConvertTokensToExpression(tokens);
         try
         {
+            var tokens = ParseTokens(request.Expression);
+            var root = ConvertTokensToExpression(tokens);
+        
             if (root.IsNumber || root.IsText)
             {
                 return root;
@@ -28,10 +29,12 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
             if (root.IsFormula)
             {
                 await ReplaceVariablesFromContext(request.SheetId, root);
-
+                ReplaceWhitespaceExpressions(root);
                 ReplaceNestedExpressions(root);
-                    
-                return TryCalculateExpression(root.Next);
+                var newRoot = TryCalculateExpression(root.Next);
+
+                newRoot.DependentVariables = root.DependentVariables;
+                return newRoot;
             }
         }
         catch (Exception)
@@ -83,33 +86,17 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
             
         var start = exp;
         var current = exp;
-        Expression? highPrio;  // operation that must be executed first
+        Expression? highPrio;
         int opCount;
             
         do
         {
-            opCount = 0;
             highPrio = null;
-                
-            do
-            {
-                    
-                if (current.IsBinaryOperand)
-                {
-                    opCount++;
-                    if (highPrio is not { IsHighPrioOperand: true })
-                    {
-                        highPrio = current;
-                    }   
-                }
-
-                current = current.Next;
-            } while (current is { IsClosingParentheses: false });
+            opCount = FindNextHighPriorityOperation(current, ref highPrio);
 
             if (opCount == 0 || highPrio == null)
                 return start;
                 
-            // calculate high prio
             var previousArg = highPrio.Previous;
             var nextArg = highPrio.Next;
 
@@ -121,15 +108,32 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
                 start = newExpr;
             }
             current = start;
-                
-            Debug.WriteLine(start);
-
         } while (opCount > 0);
 
         return start;
     }
 
-    private static Expression CalculateAndReplaceHighPriorityExpression(Expression highPrio, Expression? previousArg,
+    private int FindNextHighPriorityOperation(Expression current, ref Expression? highPrio)
+    {
+        var opCount = 0;
+        do
+        {
+            if (current.IsBinaryOperand)
+            {
+                opCount++;
+                if (highPrio is not { IsHighPrioOperand: true })
+                {
+                    highPrio = current;
+                }
+            }
+
+            current = current.Next;
+        } while (current is { IsClosingParentheses: false });
+
+        return opCount;
+    }
+
+    private Expression CalculateAndReplaceHighPriorityExpression(Expression highPrio, Expression? previousArg,
         Expression? nextArg)
     {
         var result = highPrio.Tokens[0].Value switch
@@ -143,7 +147,7 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
 
         var newExpr = new Expression()
         {
-            Tokens = result.ToString().Select(x => new Token(x, TokenType.Digit)).ToList()
+            Tokens = result.ToString(CultureInfo.InvariantCulture).Select(x => new Token(x, TokenType.Digit)).ToList()
         };
 
         newExpr.Previous = previousArg.Previous.IsOpeningParentheses ? previousArg.Previous.Previous : previousArg.Previous;
@@ -208,6 +212,21 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
         } while (current is { IsClosingParentheses: false });
     }
 
+    private void ReplaceWhitespaceExpressions(Expression current)
+    {
+        do
+        {
+            if (current.IsWhitespace)
+            {
+                current.Previous!.Next = current.Next;
+                if (current.Next != null)
+                    current.Next.Previous = current.Previous;
+            }
+
+            current = current.Next;
+        } while (current is not null);
+    }
+
     private Expression ConvertTokensToExpression(List<Token> tokens)
     {
         var root = new Expression();
@@ -224,14 +243,21 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
                 next.Tokens.Add(tokens[i]);
 
                 current.Next = next;
+                
+                if (current.IsVariable)
+                    root.DependentVariables.Add(current.StringValue);
 
                 current = next;
+                
             }
             else
             {
                 current.Tokens.Add(tokens[i]);
             }
         }
+        
+        if (current.IsVariable)
+            root.DependentVariables.Add(current.StringValue);
 
         return root;
     }
@@ -239,20 +265,22 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
     private List<Token> ParseTokens(string expression)
     {
         var tokens = new List<Token>();
-        Token? previous = null;
+        Token? previous = null,
+            previousPrevious = null;
         var isFormula = expression[0] == '=';
             
         for (var i = 0; i < expression.Length; i++)
         {
             var charToken = expression[i];
 
-            var tokenType = ParseTokenType(previous, charToken);
+            var tokenType = ParseTokenType(previous, charToken, previousPrevious);
             HandleUnexpectedTokenTypes(tokenType, i, isFormula);
 
             var newToken = new Token(charToken, tokenType);
 
             tokens.Add(newToken);
 
+            previousPrevious = previous;
             previous = newToken;
         }
 
@@ -280,7 +308,7 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
         }
     }
 
-    private TokenType ParseTokenType(Token? previous, char token)
+    private TokenType ParseTokenType(Token? previous, char token, Token? previousPrevious = null)
     {
         if (previous == null || previous.Type == TokenType.None)
         {
@@ -309,7 +337,10 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
 
             if (token.IsClosingParenthesis())
                 return TokenType.ClosingParenthesis;
-                
+
+            if (token.IsWhitespace())
+                return TokenType.Whitespace;
+            
             return TokenType.Text;
         }
 
@@ -323,6 +354,9 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
 
             if (token.IsOpeningParenthesis())
                 return TokenType.OpeningParenthesis;
+            
+            if (token.IsWhitespace())
+                return TokenType.Whitespace;
         }
         else if (previous.Type == TokenType.FormulaSign)
         {
@@ -337,6 +371,9 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
             
             if (token.IsMinus())
                 return TokenType.Digit;
+            
+            if (token.IsWhitespace())
+                return TokenType.Whitespace;
         }
         else if (previous.Type == TokenType.Variable)
         {
@@ -351,6 +388,9 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
                 
             if (token.IsClosingParenthesis())
                 return TokenType.ClosingParenthesis;
+            
+            if (token.IsWhitespace())
+                return TokenType.Whitespace;
         }
         else if (previous.Type == TokenType.Text)
         {
@@ -363,6 +403,9 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
                 
             if (token.IsClosingParenthesis())
                 return TokenType.ClosingParenthesis;
+            
+            if (token.IsWhitespace())
+                return TokenType.Whitespace;
         }
         else if (previous.Type == TokenType.OpeningParenthesis)
         {
@@ -377,6 +420,32 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
 
             if (token.IsMinus())
                 return TokenType.Digit;
+            
+            if (token.IsWhitespace())
+                return TokenType.Whitespace;
+        }
+        else if (previous.Type == TokenType.Whitespace)
+        {
+            if (token.IsOpeningParenthesis())
+                return TokenType.OpeningParenthesis;
+            
+            if (token.IsClosingParenthesis())
+                return TokenType.ClosingParenthesis;
+
+            if (char.IsDigit(token))
+                return TokenType.Digit;
+
+            if (token.IsWhitespace())
+                return TokenType.Whitespace;
+            
+            if (token.IsMinus()) // expressions with whitespaces cause issues: can be ( -2 ) OR (A - 2)
+                return ParseTokenType(previousPrevious, '-');
+
+            if (token.IsBinaryOperand())
+                return TokenType.BinaryOperand;
+
+            if (token.IsText())
+                return TokenType.Variable;
         }
 
         return TokenType.InvalidToken;
@@ -384,19 +453,23 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
 
     private bool ExpressionMayContainMultipleTokens(TokenType type)
     {
-        return type switch
+        switch (type)
         {
-            TokenType.InvalidToken => false,
-            TokenType.None => false,
-            TokenType.BinaryOperand => false,
-            TokenType.Digit => true,
-            TokenType.FormulaSign => false,
-            TokenType.Variable => true,
-            TokenType.Text => true,
-            TokenType.OpeningParenthesis => false,
-            TokenType.ClosingParenthesis => false,
-            _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
-        };
+            case TokenType.InvalidToken:
+            case TokenType.None:
+            case TokenType.BinaryOperand:
+            case TokenType.OpeningParenthesis:
+            case TokenType.ClosingParenthesis:
+            case TokenType.FormulaSign:
+                return false;
+            case TokenType.Digit:
+            case TokenType.Variable:
+            case TokenType.Text:
+            case TokenType.Whitespace:
+                return true;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(type), type, null);
+        }
     }
 }
 
@@ -425,4 +498,6 @@ public static class CharExtensions
     public static bool IsOpeningParenthesis(this char c) => c is '(';
 
     public static bool IsMinus(this char c) => c is '-';
+
+    public static bool IsWhitespace(this char c) => c is ' ';
 }

@@ -5,58 +5,81 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using XL.API.Data;
+using XL.API.Data.Cache;
 using XL.API.Data.Models;
+using XL.API.Features.Expressions;
 using XL.API.Models;
 
 namespace XL.API.Features.Cells;
 
-// TODO: add fluent validator
-
 public sealed class CreateSheetCell
 {
-    public record Command(string SheetId, string CellId, string Value) : IRequest<OneOf<Success<SheetCell>, AlreadyExists<SheetCell>>>;
+    public record Command(string SheetId, string CellId, string Value) : IRequest<OneOf<Success<SheetCell>, AlreadyExists<SheetCell>,Unprocessable>>;
 
-    public class Handler : IRequestHandler<Command, OneOf<Success<SheetCell>, AlreadyExists<SheetCell>>>
+    public class Handler : IRequestHandler<Command, OneOf<Success<SheetCell>, AlreadyExists<SheetCell>, Unprocessable>>
     {
         private readonly ApplicationDbContext context;
         private readonly IMediator mediator;
+        private readonly ISheetCellRepository sheetCellRepository;
 
-        public Handler(ApplicationDbContext context, IMediator mediator)
+        public Handler(ApplicationDbContext context, IMediator mediator, ISheetCellRepository sheetCellRepository)
         {
             this.context = context;
             this.mediator = mediator;
+            this.sheetCellRepository = sheetCellRepository;
         }
 
-        public async Task<OneOf<Success<SheetCell>, AlreadyExists<SheetCell>>> Handle(Command request, CancellationToken cancellationToken)
+        public async Task<OneOf<Success<SheetCell>, AlreadyExists<SheetCell>, Unprocessable>> Handle(Command request, CancellationToken cancellationToken)
         {
-            SheetCell cell;
-            try
+            var result = await mediator.Send(new ParseExpressionRequest(request.SheetId, request.Value), cancellationToken);
+            if (result.IsT1)
+                return new Unprocessable();
+            var expression = result.AsT0;
+
+            var cell = await sheetCellRepository.Find(request.SheetId, request.CellId);
+            if (cell != null)
             {
-                cell = context.SheetCells.Add(new SheetCell()
-                {
-                    SheetId = request.SheetId,
-                    CellId = request.CellId,
-                    Expression = request.Value,
-                }).Entity;
-
-                await context.SaveChangesAsync(cancellationToken);
+                Update(cell, request.Value);
             }
-            catch (DbUpdateException ex)
+            else
             {
-                if (ex.InnerException is SqlException sqlException && sqlException.Number == 2601)
-                {
-                    var response = await mediator.Send(new GetSheetCell.Command(request.SheetId, request.CellId), cancellationToken);
-
-                    if (response.TryPickT1(out _, out var success))
-                    {
-                        return success.Value.AlreadyExists();
-                    }
-                }
-
-                throw;
+                cell = await Create(request, expression);
             }
+            
+            await context.SaveChangesAsync(cancellationToken);
 
             return cell.Success();
+        }
+
+        private async Task<SheetCell> Create(Command request, Expression expression)
+        {
+            var cell = new SheetCell()
+            {
+                SheetId = request.SheetId,
+                CellId = request.CellId,
+                Expression = request.Value,
+                NumericValue = expression.IsNumber ? expression.NumericValue : null,
+            };
+
+            foreach (var cellId in expression.DependentVariables)
+            {
+                var argumentCell = await sheetCellRepository.Find(request.SheetId, cellId);
+                
+                cell.Arguments.Add(new SheetCellReference()
+                {
+                    Child = argumentCell,
+                    Parent = cell
+                });
+            }
+
+            context.SheetCells.Add(cell);
+            
+            return cell;
+        }
+
+        private void Update(SheetCell cell, string expression)
+        {
+            
         }
     }
 
@@ -72,11 +95,13 @@ public sealed class CreateSheetCell
                 var result = await mediator.Send(command);
 
                 return result.Match(success => Results.Ok(success.Value), 
-                    alreadyExists => Results.Conflict(alreadyExists.Value));
+                    alreadyExists => Results.Conflict(alreadyExists.Value),
+                    _ => Results.UnprocessableEntity());
             })
             .WithName(nameof(CreateSheetCell))
             .Produces(StatusCodes.Status409Conflict)
             .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status422UnprocessableEntity)
             .IncludeInOpenApi();
         }
     }

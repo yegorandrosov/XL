@@ -10,6 +10,8 @@
 
     public record Success<T>(T Value);
 
+    public record Unprocessable;
+
     public static class CommandResponseExtensions
     {
         public static Success<T> Success<T>(this T item)

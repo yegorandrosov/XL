@@ -3,7 +3,7 @@
   &lt;Assembly Path="C:\Users\Asus\.nuget\packages\oneof\3.0.263\lib\netstandard2.0\OneOf.dll" /&gt;&#xD;
 &lt;/AssemblyExplorer&gt;</s:String>
 	
-	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=2ab57d8d_002De214_002D433d_002Dbf05_002De80e40098bfd/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" IsActive="True" Name="Parse_AddComplex #2" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;&#xD;
+	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=2ab57d8d_002De214_002D433d_002Dbf05_002De80e40098bfd/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" Name="Parse_AddComplex #2" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;&#xD;
   &lt;Solution /&gt;&#xD;
 &lt;/SessionState&gt;</s:String>
 	
@@ -11,7 +11,7 @@
   &lt;Project Location="C:\Users\Asus\RiderProjects\XL\XL.Tests" Presentation="&amp;lt;XL.Tests&amp;gt;" /&gt;&#xD;
 &lt;/SessionState&gt;</s:String>
 	
-	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=720e7364_002D4717_002D430c_002D945a_002D79da49b2a3b8/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" Name="ExpressionParserTests #3" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;&#xD;
+	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=720e7364_002D4717_002D430c_002D945a_002D79da49b2a3b8/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" IsActive="True" Name="ExpressionParserTests #3" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;&#xD;
   &lt;TestAncestor&gt;&#xD;
     &lt;TestId&gt;NUnit3x::3CA75680-D174-472A-B25A-6726FF7EA941::net7.0::XL.Tests.ExpressionParserTests&lt;/TestId&gt;&#xD;
   &lt;/TestAncestor&gt;&#xD;

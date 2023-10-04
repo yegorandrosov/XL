@@ -29,7 +29,7 @@ public class GetSheet
                 .Where(x => x.SheetId == request.SheetId)
                 .ToListAsync(cancellationToken: cancellationToken);
 
-            if (sheetCells == null)
+            if (!sheetCells.Any())
             {
                 return new NotFound();
             }

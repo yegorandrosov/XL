@@ -5,8 +5,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using XL.API.Data;
-using XL.API.Data.Cache;
 using XL.API.Data.Models;
+using XL.API.Data.Repositories;
 using XL.API.Features.Expressions;
 using XL.API.Models;
 
@@ -21,6 +21,7 @@ public sealed class UpsertSheetCell
         private readonly ApplicationDbContext context;
         private readonly IMediator mediator;
         private readonly ISheetCellRepository sheetCellRepository;
+        private readonly Dictionary<string, bool> cellValidationMap = new();
 
         public Handler(ApplicationDbContext context, IMediator mediator, ISheetCellRepository sheetCellRepository)
         {
@@ -43,21 +44,10 @@ public sealed class UpsertSheetCell
             var cell = await sheetCellRepository.Find(request.SheetId, request.CellId);
             if (cell != null)
             {
-                var containsCircularReference = expression.DependentVariables
-                    .Any(varName => cell.Callers.Any(c => c.Parent.CellId == varName) || varName == request.CellId);
-                if (containsCircularReference)
-                {
-                    return new Unprocessable();
-                }
+                var valid = await ValidateAndUpdateReferences(request, expression, cell, evaluatedExpression);
 
-                try
-                {
-                    await Update(cell, request.Value, evaluatedExpression);
-                }
-                catch
-                {
+                if (!valid)
                     return new Unprocessable();
-                }
             }
             else
             {
@@ -67,6 +57,31 @@ public sealed class UpsertSheetCell
             await context.SaveChangesAsync(cancellationToken);
 
             return cell.Success();
+        }
+
+        private async Task<bool> ValidateAndUpdateReferences(Command request, Expression expression, SheetCell cell,
+            Expression evaluatedExpression)
+        {
+            var containsCircularReference = expression.DependentVariables
+                .Any(varName => cell.Callers.Any(c => c.Parent.CellId == varName) || varName == request.CellId);
+            if (containsCircularReference)
+            {
+                return false;
+            }
+
+            try
+            {
+                await Update(cell, request.Value, evaluatedExpression);
+
+                if (cellValidationMap.Any(x => x.Value == false))
+                    return false;
+            }
+            catch
+            {
+                return false;
+            }
+
+            return true;
         }
 
         private async Task<SheetCell> Create(Command request, Expression expression)
@@ -126,15 +141,22 @@ public sealed class UpsertSheetCell
 
                 var parsedExpression = await mediator.Send(new ParseExpressionRequest(caller.Expression));
                 if (parsedExpression.IsError)
-                    throw new Exception("Expression could not be parsed");
+                {
+                    cellValidationMap[caller.CellId] = false;
+                    continue;
+                }
                 var evaluatedExpression =
                     await mediator.Send(new EvaluateExpressionRequest(caller.SheetId, parsedExpression));
                 if (evaluatedExpression.IsError)
-                    throw new Exception("Expression could not be parsed");
+                {
+                    cellValidationMap[caller.CellId] = false;
+                    continue;
+                }
 
                 if (caller.NumericValue != evaluatedExpression.NumericValue)
                 {
                     await Update(caller, caller.Expression, evaluatedExpression);
+                    cellValidationMap[caller.CellId] = true;
                 }
             }
         }

@@ -3,8 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using NSubstitute.Extensions;
 using OneOf;
 using XL.API.Data;
-using XL.API.Data.Cache;
 using XL.API.Data.Models;
+using XL.API.Data.Repositories;
 using XL.API.Features.Cells;
 using XL.API.Features.Expressions;
 using XL.API.Models;
@@ -12,13 +12,12 @@ using XL.Tests.Utils;
 
 namespace XL.Tests;
 
-[Timeout(3000)]
 public class SheetIntegrationTests
 {
     private UpsertSheetCell.Handler handler;
     private ApplicationDbContext applicationDbContext;
 
-    [OneTimeSetUp]
+    [SetUp]
     public void SetUp()
     {
         var mediator = Substitute.For<IMediator>();

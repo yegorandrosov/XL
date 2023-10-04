@@ -1,13 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using XL.API.Data.Models;
 
-namespace XL.API.Data.Cache;
-
-public interface ISheetCellRepository
-{
-    Task<SheetCell?> Find(string sheetId, string cellId);
-    Task Update(SheetCell sheetCell);
-}
+namespace XL.API.Data.Repositories;
 
 public class SheetCellCacheRepository : ISheetCellRepository
 {

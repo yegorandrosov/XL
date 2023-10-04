@@ -19,7 +19,7 @@ public class ExpressionParserTests
         evaluator = new EvaluateExpressionRequestHandler(mediator);
     }
 
-    private void AddVariable(string varName, double varValue)
+    private void AddVariable(string varName, decimal varValue)
     {
         mediator
             .Send(Arg.Is<GetSheetCellValueQuery>(o => o.CellId == varName))
@@ -33,35 +33,35 @@ public class ExpressionParserTests
     [TestCase("243.542", 243.542)]
     [TestCase("-23310.023", -23310.023)]
     [TestCase("-1", -1)]
-    public async Task Parse_SingleNumber_Success(string input, double expected)
+    public async Task Parse_SingleNumber_Success(string input, decimal expected)
     {
         var expression = await parser.Handle(new ParseExpressionRequest(input), CancellationToken.None);
         var result = await evaluator.Handle(new EvaluateExpressionRequest("default", expression), CancellationToken.None);
         
-        Assert.IsTrue(result.IsT0);
-        Assert.That(result.AsT0.NumericValue, Is.EqualTo(expected));
+        Assert.IsTrue(result.IsSuccess);
+        Assert.That(result.NumericValue, Is.EqualTo(expected));
     }
 
     [TestCase("=1+1", 2)]
     [TestCase("=1492+1001+467471", 469964)]
-    [TestCase("=432*22/321+1323-2483", -1130.392523364486)]
+    [TestCase("=432*22/321+1323-2483", 432*22/321+1323-2483)]
     [TestCase("=43-10.5", 32.5)]
     [TestCase("=1+1+1", 3)]
-    public async Task Parse_Add(string formula, double expected)
+    public async Task Parse_Add(string formula, decimal expected)
     {
         var expression = await parser.Handle(new ParseExpressionRequest(formula), CancellationToken.None);
         
         var result = await evaluator.Handle(new EvaluateExpressionRequest("default", expression), CancellationToken.None);
         
-        Assert.IsTrue(result.IsT0);
-        Assert.That(result.AsT0.NumericValue, Is.EqualTo(expected));
+        Assert.IsTrue(result.IsSuccess);
+        Assert.That(result.NumericValue, Is.EqualTo(expected));
     }
 
     [TestCase("=a+3", "a", 2, 5)]
     [TestCase("=ab*5", "ab", 2, 10)]
     [TestCase("=var3/5", "var3", 10, 2)]
     [TestCase("=abc-5", "abc", 15, 10)]
-    public async Task Parse_WithOneInt_Success(string formula, string varName, double varValue, double expected)
+    public async Task Parse_WithOneInt_Success(string formula, string varName, decimal varValue, decimal expected)
     {
         AddVariable(varName, varValue);
         
@@ -70,21 +70,21 @@ public class ExpressionParserTests
         
         var result = await evaluator.Handle(new EvaluateExpressionRequest("default", expression), CancellationToken.None);
 
-        Assert.IsTrue(result.IsT0);
-        Assert.IsTrue(result.AsT0.IsNumber);
-        Assert.That(result.AsT0.NumericValue, Is.EqualTo(expected));
+        Assert.IsTrue(result.IsSuccess);
+        Assert.IsTrue(result.IsNumber);
+        Assert.That(result.NumericValue, Is.EqualTo(expected));
     }
 
     [TestCase("=X-10", "X", 11.9, 1.9)]
-    public async Task Parse_WithOneDouble_Success(string formula, string varName, double varValue, double expected)
+    public async Task Parse_WithOnedecimal_Success(string formula, string varName, decimal varValue, decimal expected)
     {
         AddVariable(varName, varValue);
         var expression = await parser.Handle(new ParseExpressionRequest(formula), CancellationToken.None);
         
         var result = await evaluator.Handle(new EvaluateExpressionRequest("default", expression), CancellationToken.None);
 
-        Assert.IsTrue(result.AsT0.IsNumber);
-        Assert.That(result.AsT0.NumericValue, Is.EqualTo(expected).Within(5).Ulps);
+        Assert.IsTrue(result.IsNumber);
+        Assert.That(result.NumericValue, Is.EqualTo(expected));
     }
     
     [TestCase("Hello world!")]
@@ -99,9 +99,9 @@ public class ExpressionParserTests
         
         var result = await evaluator.Handle(new EvaluateExpressionRequest("default", expression), CancellationToken.None);
 
-        Assert.IsTrue(result.IsT0);
-        Assert.IsTrue(result.AsT0.IsText);
-        Assert.That(result.AsT0.StringValue, Is.EqualTo(text));
+        Assert.IsTrue(result.IsSuccess);
+        Assert.IsTrue(result.IsText);
+        Assert.That(result.StringValue, Is.EqualTo(text));
     }
 
     [TestCase("=(1+1)", 1+1)]
@@ -116,15 +116,15 @@ public class ExpressionParserTests
     [TestCase("=(12+(5+(4+3)))*(23-5)", (12+(5+(4+3)))*(23-5))]
     [TestCase("=(-12+243+15)", (-12+243+15))]
     [TestCase("=(-12+(-243)+15)", (-12+(-243)+15))]
-    public async Task Parse_ParenthesisSimple_Success(string formula, double expected)
+    public async Task Parse_ParenthesisSimple_Success(string formula, decimal expected)
     {
         var expression = await parser.Handle(new ParseExpressionRequest(formula), CancellationToken.None);
         
         var result = await evaluator.Handle(new EvaluateExpressionRequest("default", expression), CancellationToken.None);
 
-        Assert.IsTrue(result.IsT0);
-        Assert.IsTrue(result.AsT0.IsNumber);
-        Assert.That(result.AsT0.NumericValue, Is.EqualTo(expected));
+        Assert.IsTrue(result.IsSuccess);
+        Assert.IsTrue(result.IsNumber);
+        Assert.That(result.NumericValue, Is.EqualTo(expected));
     }
 
     [Test]
@@ -137,10 +137,10 @@ public class ExpressionParserTests
         
         var result = await evaluator.Handle(new EvaluateExpressionRequest("default", expression), CancellationToken.None);
 
-        Assert.IsTrue(result.IsT0);
-        Assert.IsTrue(result.AsT0.IsNumber);
-        Assert.That(result.AsT0.NumericValue, Is.EqualTo(5 + 4 + 3));
-        CollectionAssert.AreEquivalent(new[] { "abc", "A3", "text" }, result.AsT0.DependentVariables);
+        Assert.IsTrue(result.IsSuccess);
+        Assert.IsTrue(result.IsNumber);
+        Assert.That(result.NumericValue, Is.EqualTo(5 + 4 + 3));
+        CollectionAssert.AreEquivalent(new[] { "abc", "A3", "text" }, result.DependentVariables);
     }
 
     [Test]
@@ -154,10 +154,10 @@ public class ExpressionParserTests
         
         var result = await evaluator.Handle(new EvaluateExpressionRequest("default", expression), CancellationToken.None);
 
-        Assert.IsTrue(result.IsT0);
-        Assert.IsTrue(result.AsT0.IsNumber);
-        Assert.That(result.AsT0.NumericValue, Is.EqualTo(0.5+6).Within(5).Ulps);
-        CollectionAssert.AreEquivalent(result.AsT0.DependentVariables, new [] { "abc", "A3", "text" });
+        Assert.IsTrue(result.IsSuccess);
+        Assert.IsTrue(result.IsNumber);
+        Assert.That(result.NumericValue, Is.EqualTo(0.5+6).Within(5).Ulps);
+        CollectionAssert.AreEquivalent(result.DependentVariables, new [] { "abc", "A3", "text" });
     }
     
     
@@ -169,10 +169,10 @@ public class ExpressionParserTests
         var expression = await parser.Handle(new ParseExpressionRequest("=abc*abc*abc-abc"), CancellationToken.None);
         var result = await evaluator.Handle(new EvaluateExpressionRequest("default", expression), CancellationToken.None);
         
-        Assert.IsTrue(result.IsT0);
-        Assert.IsTrue(result.AsT0.IsNumber);
-        Assert.That(result.AsT0.NumericValue, Is.EqualTo(5*5*5-5));
-        CollectionAssert.AreEquivalent(result.AsT0.DependentVariables, new [] { "abc" });
+        Assert.IsTrue(result.IsSuccess);
+        Assert.IsTrue(result.IsNumber);
+        Assert.That(result.NumericValue, Is.EqualTo(5*5*5-5));
+        CollectionAssert.AreEquivalent(result.DependentVariables, new [] { "abc" });
     }
 
     [TestCase("=--")]
@@ -185,8 +185,7 @@ public class ExpressionParserTests
         var expression = await parser.Handle(new ParseExpressionRequest(formula), CancellationToken.None);
         var result = await evaluator.Handle(new EvaluateExpressionRequest("default", expression), CancellationToken.None);
 
-        Assert.IsTrue(result.IsT1);
-        Assert.NotNull(result.AsT1);
+        Assert.IsTrue(result.IsError);
     }
 
     [TestCase("=a+5")]
@@ -202,25 +201,24 @@ public class ExpressionParserTests
         var expression = await parser.Handle(new ParseExpressionRequest(formula), CancellationToken.None);
         var result = await evaluator.Handle(new EvaluateExpressionRequest("default", expression), CancellationToken.None);
 
-        Assert.IsTrue(result.IsT1);
-        Assert.NotNull(result.AsT1);
+        Assert.IsTrue(result.IsError);
     }
 
 
     [TestCase("=123 + 456 - 789", 123 + 456 - 789)]
     [TestCase("=(123 + (456 - 789 )", (123 + (456 - 789 )))]
     [TestCase("=137637*2   +13", 137637*2   +13)]
-    public async Task Parse_FormulaWithWhiteSpace(string formula, double expected)
+    public async Task Parse_FormulaWithWhiteSpace_Success(string formula, decimal expected)
     {
         var expression = await parser.Handle(new ParseExpressionRequest(formula), CancellationToken.None);
         var result = await evaluator.Handle(new EvaluateExpressionRequest("default", expression), CancellationToken.None);
 
-        Assert.IsTrue(result.IsT0);
-        Assert.That(result.AsT0.NumericValue, Is.EqualTo(expected));
+        Assert.IsTrue(result.IsSuccess);
+        Assert.That(result.NumericValue, Is.EqualTo(expected));
     }
 
     [Test]
-    public async Task Parse_FormulaWithWhitespaceAndVariables()
+    public async Task Parse_FormulaWithWhitespaceAndVariables_Success()
     {
         AddVariable("x", 384);
 
@@ -228,7 +226,7 @@ public class ExpressionParserTests
         var expression = await parser.Handle(new ParseExpressionRequest(formula), CancellationToken.None);
         var result = await evaluator.Handle(new EvaluateExpressionRequest("default", expression), CancellationToken.None);
 
-        Assert.IsTrue(result.IsT0);
-        Assert.That(result.AsT0.NumericValue, Is.EqualTo(384*2 - 384/2));
+        Assert.IsTrue(result.IsSuccess);
+        Assert.That(result.NumericValue, Is.EqualTo(384*2 - 384/2));
     }
 }

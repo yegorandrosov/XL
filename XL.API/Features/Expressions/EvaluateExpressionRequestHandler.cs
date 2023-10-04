@@ -1,13 +1,12 @@
-﻿using System.Diagnostics;
-using System.Globalization;
+﻿using System.Globalization;
 
 namespace XL.API.Features.Expressions;
 
 public record ParserError;
 
 public record EvaluateExpressionRequest
-    (string SheetId, Expression Expression) : IRequest<OneOf<Expression, ParserError>>;
-public class EvaluateExpressionRequestHandler : IRequestHandler<EvaluateExpressionRequest, OneOf<Expression, ParserError>>
+    (string SheetId, Expression Expression) : IRequest<Expression>;
+public class EvaluateExpressionRequestHandler : IRequestHandler<EvaluateExpressionRequest, Expression>
 {
     private readonly IMediator mediator;
 
@@ -16,7 +15,7 @@ public class EvaluateExpressionRequestHandler : IRequestHandler<EvaluateExpressi
         this.mediator = mediator;
     }
         
-    public async Task<OneOf<Expression, ParserError>> Handle(EvaluateExpressionRequest request, CancellationToken cancellationToken)
+    public async Task<Expression> Handle(EvaluateExpressionRequest request, CancellationToken cancellationToken)
     {
         try
         {
@@ -30,9 +29,10 @@ public class EvaluateExpressionRequestHandler : IRequestHandler<EvaluateExpressi
             if (root.IsFormula)
             {
                 await ReplaceVariablesFromContext(request.SheetId, root);
-                ReplaceWhitespaceExpressions(root);
                 ReplaceNestedExpressions(root);
                 var newRoot = TryCalculateExpression(root.Next);
+                if (newRoot.Count() > 2)
+                    throw new Exception("Can not be evaluated");
 
                 newRoot.DependentVariables = root.DependentVariables;
                 return newRoot;
@@ -40,10 +40,10 @@ public class EvaluateExpressionRequestHandler : IRequestHandler<EvaluateExpressi
         }
         catch (Exception)
         {
-            // ignored
+            request.Expression.IsError = true;
         }
         
-        return new ParserError();
+        return request.Expression;
     }
 
     private async Task ReplaceVariablesFromContext(string sheetId, Expression root)
@@ -110,7 +110,7 @@ public class EvaluateExpressionRequestHandler : IRequestHandler<EvaluateExpressi
             }
             current = start;
         } while (opCount > 0);
-
+        
         return start;
     }
 
@@ -212,20 +212,4 @@ public class EvaluateExpressionRequestHandler : IRequestHandler<EvaluateExpressi
             current = current.Next;
         } while (current is { IsClosingParentheses: false });
     }
-
-    private void ReplaceWhitespaceExpressions(Expression current)
-    {
-        do
-        {
-            if (current.IsWhitespace)
-            {
-                current.Previous!.Next = current.Next;
-                if (current.Next != null)
-                    current.Next.Previous = current.Previous;
-            }
-
-            current = current.Next;
-        } while (current is not null);
-    }
-
 }

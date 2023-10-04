@@ -12,11 +12,11 @@ using XL.API.Models;
 
 namespace XL.API.Features.Cells;
 
-public sealed class CreateSheetCell
+public sealed class UpsertSheetCell
 {
-    public record Command(string SheetId, string CellId, string Value) : IRequest<OneOf<Success<SheetCell>, AlreadyExists<SheetCell>,Unprocessable>>;
+    public record Command(string SheetId, string CellId, string Value) : IRequest<OneOf<Success<SheetCell>, Unprocessable>>;
 
-    public class Handler : IRequestHandler<Command, OneOf<Success<SheetCell>, AlreadyExists<SheetCell>, Unprocessable>>
+    public class Handler : IRequestHandler<Command, OneOf<Success<SheetCell>, Unprocessable>>
     {
         private readonly ApplicationDbContext context;
         private readonly IMediator mediator;
@@ -29,20 +29,32 @@ public sealed class CreateSheetCell
             this.sheetCellRepository = sheetCellRepository;
         }
 
-        public async Task<OneOf<Success<SheetCell>, AlreadyExists<SheetCell>, Unprocessable>> Handle(Command request, CancellationToken cancellationToken)
+        public async Task<OneOf<Success<SheetCell>, Unprocessable>> Handle(Command request, CancellationToken cancellationToken)
         {
             var expression = await mediator.Send(new ParseExpressionRequest(request.Value), cancellationToken);
             if (expression.IsError)
                 return new Unprocessable();
             
+            var evaluatedExpression =
+                await mediator.Send(new EvaluateExpressionRequest(request.SheetId, expression), cancellationToken);
+            if (evaluatedExpression.IsError)
+                return new Unprocessable();
+            
             var cell = await sheetCellRepository.Find(request.SheetId, request.CellId);
             if (cell != null)
-            {if (expression.DependentVariables.Any(cell.))
-                Update(cell, request.Value, expression);
+            {
+                var containsCircularReference = expression.DependentVariables
+                    .Any(varName => cell.Callers.Any(c => c.Parent.CellId == varName) || varName == request.CellId);
+                if (containsCircularReference)
+                {
+                    return new Unprocessable();
+                }
+                
+                Update(cell, request.Value, evaluatedExpression);
             }
             else
             {
-                cell = await Create(request, expression);
+                cell = await Create(request, evaluatedExpression);
             }
             
             await context.SaveChangesAsync(cancellationToken);
@@ -94,10 +106,9 @@ public sealed class CreateSheetCell
                 var result = await mediator.Send(command);
 
                 return result.Match(success => Results.Ok(success.Value), 
-                    alreadyExists => Results.Conflict(alreadyExists.Value),
                     _ => Results.UnprocessableEntity());
             })
-            .WithName(nameof(CreateSheetCell))
+            .WithName(nameof(UpsertSheetCell))
             .Produces(StatusCodes.Status409Conflict)
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status422UnprocessableEntity)

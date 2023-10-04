@@ -1,4 +1,6 @@
-﻿namespace XL.API.Features.Expressions;
+﻿using System.Diagnostics;
+
+namespace XL.API.Features.Expressions;
 
 public record ParseExpressionRequest(string Expression) : IRequest<Expression>;
 public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequest, Expression>
@@ -9,6 +11,7 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
         try
         {
             var tokens = ParseTokens(request.Expression);
+            
             root = ConvertTokensToExpression(tokens);
         }
         catch (Exception e)
@@ -23,28 +26,31 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
     private List<Token> ParseTokens(string expression)
     {
         var tokens = new List<Token>();
-        Token? previous = null,
-            previousPrevious = null;
+        Token? previous = null;
         var isFormula = expression[0] == '=';
+        var lastNonWhiteSpaceIdx = -1;
             
         for (var i = 0; i < expression.Length; i++)
         {
             var charToken = expression[i];
+            if (isFormula && charToken == ' ')
+                continue;
 
-            var tokenType = ParseTokenType(previous, charToken, previousPrevious);
+            var tokenType = ParseTokenType(previous, charToken, lastNonWhiteSpaceIdx != i - 1);
             HandleUnexpectedTokenTypes(tokenType, i);
 
             var newToken = new Token(charToken, tokenType);
 
             tokens.Add(newToken);
-
-            previousPrevious = previous;
             previous = newToken;
+            
+            if (!charToken.IsWhitespace())
+                lastNonWhiteSpaceIdx = i;
         }
 
         if (!isFormula)
         {
-            if (!double.TryParse(expression, out _))
+            if (!decimal.TryParse(expression, out _))
             {
                 tokens = tokens.Select(x => x with { Type = TokenType.Text }).ToList();
             }
@@ -66,7 +72,7 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
         }
     }
 
-    private TokenType ParseTokenType(Token? previous, char token, Token? previousPrevious = null)
+    private TokenType ParseTokenType(Token? previous, char token, bool afterWhitespace)
     {
         if (previous == null || previous.Type == TokenType.None)
         {
@@ -78,14 +84,14 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
 
             if (token.IsMinus())
                 return TokenType.Digit;
-
+            
             return TokenType.Text;
         }
 
         if (previous.Type == TokenType.Digit)
         {
             if (char.IsDigit(token))
-                return TokenType.Digit;
+                return afterWhitespace ? TokenType.InvalidToken : TokenType.Digit;
 
             if (token.IsBinaryOperand())
                 return TokenType.BinaryOperand;
@@ -95,9 +101,6 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
 
             if (token.IsClosingParenthesis())
                 return TokenType.ClosingParenthesis;
-
-            if (token.IsWhitespace())
-                return TokenType.Whitespace;
             
             return TokenType.Text;
         }
@@ -112,9 +115,6 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
 
             if (token.IsOpeningParenthesis())
                 return TokenType.OpeningParenthesis;
-            
-            if (token.IsWhitespace())
-                return TokenType.Whitespace;
         }
         else if (previous.Type == TokenType.FormulaSign)
         {
@@ -129,9 +129,6 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
             
             if (token.IsMinus())
                 return TokenType.Digit;
-            
-            if (token.IsWhitespace())
-                return TokenType.Whitespace;
         }
         else if (previous.Type == TokenType.Variable)
         {
@@ -146,9 +143,6 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
                 
             if (token.IsClosingParenthesis())
                 return TokenType.ClosingParenthesis;
-            
-            if (token.IsWhitespace())
-                return TokenType.Whitespace;
         }
         else if (previous.Type == TokenType.Text)
         {
@@ -161,9 +155,6 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
                 
             if (token.IsClosingParenthesis())
                 return TokenType.ClosingParenthesis;
-            
-            if (token.IsWhitespace())
-                return TokenType.Whitespace;
         }
         else if (previous.Type == TokenType.OpeningParenthesis)
         {
@@ -178,32 +169,6 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
 
             if (token.IsMinus())
                 return TokenType.Digit;
-            
-            if (token.IsWhitespace())
-                return TokenType.Whitespace;
-        }
-        else if (previous.Type == TokenType.Whitespace)
-        {
-            if (token.IsOpeningParenthesis())
-                return TokenType.OpeningParenthesis;
-            
-            if (token.IsClosingParenthesis())
-                return TokenType.ClosingParenthesis;
-
-            if (char.IsDigit(token))
-                return TokenType.Digit;
-
-            if (token.IsWhitespace())
-                return TokenType.Whitespace;
-            
-            if (token.IsMinus()) // expressions with whitespaces cause issues: can be ( -2 ) OR (A - 2)
-                return ParseTokenType(previousPrevious, '-');
-
-            if (token.IsBinaryOperand())
-                return TokenType.BinaryOperand;
-
-            if (token.IsText())
-                return TokenType.Variable;
         }
 
         return TokenType.InvalidToken;
@@ -223,7 +188,6 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
             case TokenType.Digit:
             case TokenType.Variable:
             case TokenType.Text:
-            case TokenType.Whitespace:
                 return true;
             default:
                 throw new ArgumentOutOfRangeException(nameof(type), type, null);
@@ -235,7 +199,6 @@ public class ParseExpressionRequestHandler : IRequestHandler<ParseExpressionRequ
         var root = new Expression();
         var current = root;
         current.Tokens.Add(tokens[0]);
-            
         for (var i = 1; i < tokens.Count; i++)
         {
             if (tokens[i].Type != tokens[i - 1].Type ||

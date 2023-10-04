@@ -1,0 +1,36 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.6.33801.468
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "XL.API", "XL.API\XL.API.csproj", "{6DC282A5-A931-4FE4-9BCA-C45C8218E171}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "XL.Tests", "XL.Tests\XL.Tests.csproj", "{3CA75680-D174-472A-B25A-6726FF7EA941}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{2491E8C3-663E-4EB0-BB7B-91A898F72329}"
+	ProjectSection(SolutionItems) = preProject
+		README.md = README.md
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{6DC282A5-A931-4FE4-9BCA-C45C8218E171}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6DC282A5-A931-4FE4-9BCA-C45C8218E171}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6DC282A5-A931-4FE4-9BCA-C45C8218E171}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6DC282A5-A931-4FE4-9BCA-C45C8218E171}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3CA75680-D174-472A-B25A-6726FF7EA941}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3CA75680-D174-472A-B25A-6726FF7EA941}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3CA75680-D174-472A-B25A-6726FF7EA941}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3CA75680-D174-472A-B25A-6726FF7EA941}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {E24A169F-B99F-4CCF-8996-BEB4D766E990}
+	EndGlobalSection
+EndGlobal

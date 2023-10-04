@@ -6,6 +6,8 @@ services:
     build:
       context: .
       dockerfile: XL.API/Dockerfile
+    ports:
+      - "8080:80"
 
   sql:
     image: mcr.microsoft.com/mssql/server:2019-latest
